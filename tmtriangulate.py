@@ -274,6 +274,7 @@ class Triangulate_TMs():
             output_object = handle_file(self.output_file,'open',mode='w')
             self._write_phrasetable(model1, model2, output_object)
             handle_file(self.output_file,'close',output_object,mode='w')
+
     def _get_nextline(self,model):
         ''' This function get the next line in file
             without reading the file
@@ -298,13 +299,15 @@ class Triangulate_TMs():
     # get the maximum
     # now go to bed
 
-    def _phrasetable_traverse(self,model1,model2,prev_line1,prev_line2,deci):
+    def _phrasetable_traverse(self,model1,model2,prev_line1,prev_line2,deci,output_object,iteration):
         '''
         Recursively walk through two model, select the matching pair
         deci = 1 : read next line of model 1
         deci = 2 : read next line of model 2
         deci = 0 : begining, read next line of both
         '''
+        if (not iteration % 100000):
+            sys.stderr.write(str(iteration)+"...")
         # loading line1, line2
         if (deci == 0):
             line1 = self._load_line(self._get_nextline(model1))
@@ -323,10 +326,10 @@ class Triangulate_TMs():
         if (self.phrase_equal[0]):
             if (line1 and line1[0] == self.phrase_equal[0]):
                 self.phrase_equal[1].append(line1)
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=1)
+                self._phrasetable_traverse(model1, model2, line1, line2, deci=1, output_object=output_object, iteration=iteration+1)
             elif (line2 and line2[0] == self.phrase_equal[0]):
                 self.phrase_equal[2].append(line2)
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=2)
+                self._phrasetable_traverse(model1, model2, line1, line2, deci=2, output_object=output_object, iteration=iteration+1)
             else:
                 # out of the matching reason
                 # process the maching part
@@ -336,15 +339,15 @@ class Triangulate_TMs():
         # TODO: There might be a bug, not loading all file --> check
         if (not line1 or not line2):
             #self.phrase_equal = defaultdict(lambda: []*3)
-            self._sum_combine()
+            self._sum_combine_and_print(output_object)
             return None
 
 
         if (not self.phrase_equal[0]):
             if (line1[0] < line2[0]):
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=1)
+                self._phrasetable_traverse(model1, model2, line1, line2, deci=1,output_object=output_object, iteration=iteration+1)
             elif (line1[0] > line2[0]):
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=2)
+                self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
             elif (line1[0] == line2[0]):
                 # just print all of them
                 #print "Match: ", line1, line2
@@ -352,7 +355,53 @@ class Triangulate_TMs():
                 self.phrase_equal[0] = line1[0]
                 #self.phrase_equal[1].append(line1)
                 self.phrase_equal[2].append(line2)
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=2)
+                self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
+    def _sum_combine_and_print(self,output_object):
+        ''' Follow Cohn at el.2007
+        The conditional over the source-target pair is: p(s|t) = sum_i p(s|i,t)p(i|t) = sum_i p(s|i)p(i|t)
+        in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
+        After combining two phrase-table, print them right after it
+        '''
+        for phrase1 in self.phrase_equal[1]:
+            for phrase2 in self.phrase_equal[2]:
+                if (phrase1[0] != phrase2[0]):
+                    sys.exit("THE PIVOTS ARE DIFFERENT")
+                print "Matching : ", phrase1, phrase2
+                src = phrase1[1]
+                tgt = phrase2[1]
+                if (not isinstance(phrase1[2],list)):
+                    phrase1[2] = [float(i) for i in phrase1[2].split()]
+                if (not isinstance(phrase2[2],list)):
+                    phrase2[2] = [float(j) for j in phrase2[2].split()]
+                #self.phrase_probabilities=[0]*4
+                # A-B = A|B|P(A|B) L(A|B) P(B|A) L(B|A)
+                # A-C = A|C|P(A|C) L(A|C) P(C|A) L(C|A)
+                ## B-C = B|C|P(B|C) L(B|C) P(C|B) L(C|B)
+
+                self.phrase_probabilities[src][tgt][0] = phrase1[2][2] * phrase2[2][0]
+                self.phrase_probabilities[src][tgt][1] = phrase1[2][3] * phrase2[2][1]
+                self.phrase_probabilities[src][tgt][2] = phrase1[2][0] * phrase2[2][2]
+                self.phrase_probabilities[src][tgt][3] = phrase1[2][1] * phrase2[2][3]
+
+                self._get_word_alignments(src, tgt, phrase1[3], phrase2[3])
+                self._get_word_counts(src, tgt, phrase1[4], phrase2[4])
+
+        #print the output
+        for src in sorted(self.phrase_probabilities):
+            for tgt in sorted(self.phrase_probabilities[src]):
+                outline =  self._write_phrasetable_file(src,tgt,self.phrase_probabilities[src][tgt],self.phrase_alignments[src][tgt],self.phrase_word_counts[src][tgt])
+                output_object.write(outline)
+
+        # reset the memory
+        self.phrase_equal = defaultdict(lambda: []*3)
+        self.phrase_probabilities = defaultdict(lambda: defaultdict(lambda: [0]*4)) # 0.4 1 0.5 0.4
+        self.phrase_word_counts = defaultdict(lambda: defaultdict(lambda: [0]*3)) # 1000 10 10
+        self.phrase_alignments =  defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: []))) # 0-0 1-2
+        #TODO: Check above process of calculating probabilities
+
+
+        self.phrase_equal = defaultdict(lambda: []*3)
+
 
     def _sum_combine(self):
         ''' Follow Cohn at el.2007
@@ -435,21 +484,20 @@ class Triangulate_TMs():
         if self.mode == 'interpolate' and not self.flags['normalized']:
             store_flag = 'pairs'
 
-        i = 0
         sys.stderr.write('Incrementally loading and processing phrase tables...')
         # Start process phrase table
         self.phrase_equal = defaultdict(lambda: []*3)
         self.phrase_probabilities = defaultdict(lambda: defaultdict(lambda: [0]*4)) # 0.4 1 0.5 0.4
         self.phrase_word_counts = defaultdict(lambda: defaultdict(lambda: [0]*3)) # 1000 10 10
         self.phrase_alignments =  defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: []))) # 0-0 1-2
-        self._phrasetable_traverse(model1=model1, model2=model2, prev_line1=None, prev_line2=None, deci=0)
+        self._phrasetable_traverse(model1=model1, model2=model2, prev_line1=None, prev_line2=None, deci=0, output_object=output_object,iteration=0)
         #TODO: Check above process of calculating probabilities
 
         # print the output
-        for src in sorted(self.phrase_probabilities):
-            for tgt in sorted(self.phrase_probabilities[src]):
-                outline =  self._write_phrasetable_file(src,tgt,self.phrase_probabilities[src][tgt],self.phrase_alignments[src][tgt],self.phrase_word_counts[src][tgt])
-                output_object.write(outline)
+        #for src in sorted(self.phrase_probabilities):
+        #    for tgt in sorted(self.phrase_probabilities[src]):
+        #        outline =  self._write_phrasetable_file(src,tgt,self.phrase_probabilities[src][tgt],self.phrase_alignments[src][tgt],self.phrase_word_counts[src][tgt])
+        #        output_object.write(outline)
         sys.stderr.write("done")
 
 
