@@ -356,6 +356,62 @@ class Triangulate_TMs():
                 #self.phrase_equal[1].append(line1)
                 self.phrase_equal[2].append(line2)
                 self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
+
+
+    def _phrasetable_traversal(self,model1,model2,prev_line1,prev_line2,deci,output_object,iteration):
+        ''' A non-recursive way to read two model
+        '''
+        line1 =  self._load_line(model1[0].readline())
+        line2 =  self._load_line(model2[0].readline())
+        count = 0
+        while(1):
+            if not count%100000:
+                sys.stderr.write(str(count)+'...')
+            count+=1
+            #if (not line1 or not line2):
+            #    break
+            if (self.phrase_equal[0]):
+                if (line1 and line1[0] == self.phrase_equal[0]):
+                    self.phrase_equal[1].append(line1)
+                    line1 =  self._load_line(model1[0].readline())
+                    continue
+                elif (line2 and line2[0] == self.phrase_equal[0]):
+                    self.phrase_equal[2].append(line2)
+                    line2 = self._load_line(model2[0].readline())
+                    continue
+                else:
+                    # out of the matching reason
+                    # process the maching part
+                    self._sum_combine_and_print(output_object)
+
+            # handle if the matching is found
+            if (not line1 or not line2):
+                #self.phrase_equal = defaultdict(lambda: []*3)
+                self._sum_combine_and_print(output_object)
+                sys.stderr.write("Finish loading\n")
+                return None
+
+            # handle if the machine is not found
+            if (not self.phrase_equal[0]):
+                if (line1[0] < line2[0]):
+                    line1 = self._load_line(model1[0].readline())
+                elif (line1[0] > line2[0]):
+                    line2 = self._load_line(model2[0].readline())
+                elif (line1[0] == line2[0]):
+                    # just print all of them
+                    #print "Match: ", line1, line2
+                    self.phrase_equal[0] = line1[0]
+                    #self.phrase_equal[1].append(line1)
+                    #self.phrase_equal[2].append(line2)
+                    #self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
+
+
+
+
+        #for line1 in model1[0]:
+        #    print line1
+
+
     def _sum_combine_and_print(self,output_object):
         ''' Follow Cohn at el.2007
         The conditional over the source-target pair is: p(s|t) = sum_i p(s|i,t)p(i|t) = sum_i p(s|i)p(i|t)
@@ -366,7 +422,7 @@ class Triangulate_TMs():
             for phrase2 in self.phrase_equal[2]:
                 if (phrase1[0] != phrase2[0]):
                     sys.exit("THE PIVOTS ARE DIFFERENT")
-                print "Matching : ", phrase1, phrase2
+                #print "Matching : ", phrase1, phrase2
                 src = phrase1[1]
                 tgt = phrase2[1]
                 if (not isinstance(phrase1[2],list)):
@@ -490,7 +546,7 @@ class Triangulate_TMs():
         self.phrase_probabilities = defaultdict(lambda: defaultdict(lambda: [0]*4)) # 0.4 1 0.5 0.4
         self.phrase_word_counts = defaultdict(lambda: defaultdict(lambda: [0]*3)) # 1000 10 10
         self.phrase_alignments =  defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: []))) # 0-0 1-2
-        self._phrasetable_traverse(model1=model1, model2=model2, prev_line1=None, prev_line2=None, deci=0, output_object=output_object,iteration=0)
+        self._phrasetable_traversal(model1=model1, model2=model2, prev_line1=None, prev_line2=None, deci=0, output_object=output_object,iteration=0)
         #TODO: Check above process of calculating probabilities
 
         # print the output
