@@ -31,9 +31,6 @@ def parse_command_line():
     group1.add_argument('action', metavar='ACTION', choices=["combine_given_weights","combine_given_tuning_set","combine_reordering_tables","compute_cross_entropy","return_best_cross_entropy","compare_cross_entropies"],
                     help='What you want to do with the models. One of %(choices)s.')
 
-    #group1.add_argument('model', metavar='DIRECTORY', nargs='+',
-    #                help='Model directory. Assumes default Moses structure (i.e. path to phrase table and lexical tables).')
-
     group1.add_argument('-ps', metavar='DIRECTORY', dest='srcpvt',
                     help='model of the source and pivot, actually, it is going to be pivot-source')
 
@@ -277,13 +274,6 @@ class Triangulate_TMs():
             output_object = handle_file(self.output_file,'open',mode='w')
             self._write_phrasetable(model1, model2, output_object)
             handle_file(self.output_file,'close',output_object,mode='w')
-        pass
-        # I AM HERE
-        if self.output_lexical:
-            sys.stderr.write('Writing lexical tables\n')
-            self._ensure_loaded(['lexical'])
-            self.model_interface.write_lexical_file('e2f',self.output_lexical,weights[1],self.mode)
-            self.model_interface.write_lexical_file('f2e',self.output_lexical,weights[3],self.mode)
     def _get_nextline(self,model):
         ''' This function get the next line in file
             without reading the file
@@ -564,8 +554,5 @@ if __name__ == "__main__":
                                i_f2e=args.i_f2e,
                                i_f2e_lex=args.i_f2e_lex,
                                write_phrase_penalty=args.write_phrase_penalty)
-        # execute right method
-        #f_string = "combiner."+args.action+'()'
-        #exec(f_string)
 
         combiner.combine_standard()
