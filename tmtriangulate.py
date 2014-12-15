@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# ./naive_triangulate.py combine_given_weights test/model1 test/model2 -ps test/model1 -pt test/model2 -o test/phrase-table_sample
+# ./tmtriangulate.py combine_given_weights -ps test/model1 -pt test/model2 -o test/phrase-table_sample
 #  This class implement a naive method for triangulation: nothing
 #  The most important part of this method is to initialize variables
 
@@ -23,7 +23,7 @@ except:
     izip = zip
 
 def parse_command_line():
-    parser = argparse.ArgumentParser(description='Combine translation models. Check DOCSTRING of the class Combine_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples.')
+    parser = argparse.ArgumentParser(description='Combine translation models. Check DOCSTRING of the class Triangulate_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples.')
 
     group1 = parser.add_argument_group('Main options')
     group2 = parser.add_argument_group('More model combination options')
@@ -47,7 +47,7 @@ def parse_command_line():
     group1.add_argument('-m', '--mode', type=str,
                     default="interpolate",
                     choices=["counts","interpolate","loglinear"],
-                    help='basic mixture-model algorithm. Default: %(default)s. Note: depending on mode and additional configuration, additional statistics are needed. Check docstring documentation of Combine_TMs() for more info.')
+                    help='basic mixture-model algorithm. Default: %(default)s. Note: depending on mode and additional configuration, additional statistics are needed. Check docstring documentation of Triangulate_TMs() for more info.')
 
     group1.add_argument('-r', '--reference', type=str,
                     default=None,
@@ -100,7 +100,7 @@ def parse_command_line():
     return parser.parse_args()
 
 
-class Combine_TMs():
+class Triangulate_TMs():
     """This class handles the various options, checks them for sanity and has methods that define what models to load and what functions to call for the different tasks.
        Typically, you only need to interact with this class and its attributes.
 
@@ -547,7 +547,7 @@ if __name__ == "__main__":
     else:
         args = parse_command_line()
         #initialize
-        combiner = Combine_TMs(weights=args.weights,
+        combiner = Triangulate_TMs(weights=args.weights,
                                model1=args.srcpvt,
                                model2=args.pvttgt,
                                mode=args.mode,
