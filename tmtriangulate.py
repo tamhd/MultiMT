@@ -16,6 +16,8 @@ from collections import defaultdict
 from operator import mul
 from tempfile import NamedTemporaryFile
 from tmcombine import Moses, Moses_Alignment, to_list
+from subprocess import Popen
+
 
 try:
     from itertools import izip
@@ -95,6 +97,38 @@ def parse_command_line():
                     help=('don\'t directly interpolate lexical weights, but interpolate word translation probabilities instead and recompute the lexical weights. Only relevant in mode "interpolate".'))
 
     return parser.parse_args()
+
+class Merge_TM():
+    """This class take input as one noisy phrase table in which it consists of so many repeated lines.
+       The output of this class should be one final clean phrase table
+
+       The tasks which have to be done are:
+        + Merge TM by summing them up
+        + Merge TM by taking the maximum
+        + Prune TM by one way or another
+    """
+    def __init__(self,model=None,
+                      output_file=None,
+                      mode='interpolate',
+                      number_of_features=4,
+                      model_interface=Moses,
+                      reference_interface=Moses_Alignment,
+                      reference_file=None,
+                      lang_src=None,
+                      lang_target=None,
+                      output_lexical=None,
+                      **flags):
+
+        self.mode = mode
+        self.output_file = output_file
+        self.lang_src = lang_src
+        self.lang_target = lang_target
+        self.loaded = defaultdict(int)
+        self.output_lexical = output_lexical
+        self.flags = copy.copy(self.flags)
+        self.flags.update(flags)
+
+
 
 
 class Triangulate_TMs():
@@ -282,16 +316,25 @@ class Triangulate_TMs():
         for line in model[0]:
             return line
         return None
+
+
+
     def _load_line(self,line):
         if (not line):
             return None
         ''' This function convert a string into an array of string and probability
+            TODO: something wrong here with input:
+            ['% of cases ; whereas', '% p\xc5\x99\xc3\xadpad\xc5\xaf ; vzhledem k tomu ,', '1 0.000339721 0.5 0.0122099 2.718', '||| 1 2 1']
         '''
         #print "line : ", line
-        line = line.rstrip().split(b' ||| ')
+        line = line.rstrip().split(b'|||')
         if line[-1].endswith(b' |||'):
             line[-1] = line[-1][:-4]
             line.append(b'')
+
+        # remove the blank space
+        #for i in range(len(line)):
+        #    line[i] = line[i].strip()
         #print "line after: ", line
         return line
     #TODO: Hey bitch, you have to write more than one function to combine phrase_table
@@ -360,6 +403,7 @@ class Triangulate_TMs():
 
     def _phrasetable_traversal(self,model1,model2,prev_line1,prev_line2,deci,output_object,iteration):
         ''' A non-recursive way to read two model
+            Notes: In moses phrase table, the longer phrase appears earlier than the short phrase
         '''
         line1 =  self._load_line(model1[0].readline())
         line2 =  self._load_line(model2[0].readline())
@@ -382,6 +426,7 @@ class Triangulate_TMs():
                 else:
                     # out of the matching reason
                     # process the maching part
+                    #print line1, line2
                     self._sum_combine_and_print(output_object)
 
             # handle if the matching is found
@@ -393,14 +438,15 @@ class Triangulate_TMs():
 
             # handle if the machine is not found
             if (not self.phrase_equal[0]):
-                if (line1[0] < line2[0]):
+                if (line1[0] == line2[0]):
+                    self.phrase_equal[0] = line1[0]
+                elif (line1[0] < line2[0] or line1[0].startswith(line2[0])):
+                    print line1, line2
                     line1 = self._load_line(model1[0].readline())
-                elif (line1[0] > line2[0]):
+                elif (line1[0] > line2[0] or line2[0].startswith(line1[0])):
                     line2 = self._load_line(model2[0].readline())
-                elif (line1[0] == line2[0]):
                     # just print all of them
                     #print "Match: ", line1, line2
-                    self.phrase_equal[0] = line1[0]
                     #self.phrase_equal[1].append(line1)
                     #self.phrase_equal[2].append(line2)
                     #self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
@@ -423,12 +469,12 @@ class Triangulate_TMs():
                 if (phrase1[0] != phrase2[0]):
                     sys.exit("THE PIVOTS ARE DIFFERENT")
                 #print "Matching : ", phrase1, phrase2
-                src = phrase1[1]
-                tgt = phrase2[1]
+                src = phrase1[1].strip()
+                tgt = phrase2[1].strip()
                 if (not isinstance(phrase1[2],list)):
-                    phrase1[2] = [float(i) for i in phrase1[2].split()]
+                    phrase1[2] = [float(i) for i in phrase1[2].strip().split()]
                 if (not isinstance(phrase2[2],list)):
-                    phrase2[2] = [float(j) for j in phrase2[2].split()]
+                    phrase2[2] = [float(j) for j in phrase2[2].strip().split()]
                 #self.phrase_probabilities=[0]*4
                 # A-B = A|B|P(A|B) L(A|B) P(B|A) L(B|A)
                 # A-C = A|C|P(A|C) L(A|C) P(C|A) L(C|A)
@@ -439,8 +485,8 @@ class Triangulate_TMs():
                 self.phrase_probabilities[src][tgt][2] = phrase1[2][0] * phrase2[2][2]
                 self.phrase_probabilities[src][tgt][3] = phrase1[2][1] * phrase2[2][3]
 
-                self._get_word_alignments(src, tgt, phrase1[3], phrase2[3])
-                self._get_word_counts(src, tgt, phrase1[4], phrase2[4])
+                self._get_word_alignments(src, tgt, phrase1[3].strip(), phrase2[3].strip())
+                self._get_word_counts(src, tgt, phrase1[4].strip(), phrase2[4].strip())
 
         #print the output
         for src in sorted(self.phrase_probabilities):
@@ -454,7 +500,6 @@ class Triangulate_TMs():
         self.phrase_word_counts = defaultdict(lambda: defaultdict(lambda: [0]*3)) # 1000 10 10
         self.phrase_alignments =  defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: []))) # 0-0 1-2
         #TODO: Check above process of calculating probabilities
-
 
         self.phrase_equal = defaultdict(lambda: []*3)
 
@@ -496,16 +541,18 @@ class Triangulate_TMs():
            get the aligned word pairs / NULL alignments
         """
         phrase_align = defaultdict(lambda: defaultdict(lambda: []))
-
         # fill value to the phrase_align
-        for pair in align1.split(b' '):
-            p,s = pair.split(b'-')
-            p,s = int(p),int(s)
-            phrase_align[p][0].append(s)
-        for pair in align2.split(b' '):
-            p,t = pair.split(b'-')
-            p,t = int(p),int(s)
-            phrase_align[p][1].append(t)
+        try:
+            for pair in align1.split(b' '):
+                p,s = pair.split(b'-')
+                p,s = int(p),int(s)
+                phrase_align[p][0].append(s)
+            for pair in align2.split(b' '):
+                p,t = pair.split(b'-')
+                p,t = int(p),int(s)
+                phrase_align[p][1].append(t)
+        except:
+            print "align1: ", align1, " alien2:", align2 , "<------- problem"
         #print phrase_align
         for pivot,dic in phrase_align.iteritems():
             #print "pivot", pivot, dic
@@ -555,7 +602,6 @@ class Triangulate_TMs():
         #        outline =  self._write_phrasetable_file(src,tgt,self.phrase_probabilities[src][tgt],self.phrase_alignments[src][tgt],self.phrase_word_counts[src][tgt])
         #        output_object.write(outline)
         sys.stderr.write("done")
-
 
 
     def _write_phrasetable_file(self,src,tgt,features,alignment,word_counts):
@@ -614,6 +660,23 @@ def handle_file(filename,action,fileobj=None,mode='r'):
     elif action == 'close' and filename != '-':
         fileobj.close()
 
+def sort_file(filename,tempdir=None):
+    """Sort a file and return temporary file"""
+
+    cmd = ['sort', filename]
+    env = {}
+    env['LC_ALL'] = 'C'
+    if tempdir:
+        cmd.extend(['-T',tempdir])
+
+    outfile = NamedTemporaryFile(delete=False,dir=tempdir)
+    sys.stderr.write('LC_ALL=C ' + ' '.join(cmd) + ' > ' + outfile.name + '\n')
+    p = Popen(cmd,env=env,stdout=outfile.file)
+    p.wait()
+
+    outfile.seek(0)
+
+    return outfile
 
 
 def dot_product(a,b):
@@ -659,4 +722,10 @@ if __name__ == "__main__":
                                i_f2e_lex=args.i_f2e_lex,
                                write_phrase_penalty=args.write_phrase_penalty)
 
+        # write everything to a file
         combiner.combine_standard()
+        # sort the file
+        newfile = sort_file(combiner.output_file,tempdir="/net/cluster/TMP/thoang/")
+        print "sorted file", newfile
+        # combine the file
+
