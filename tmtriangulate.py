@@ -110,25 +110,127 @@ class Merge_TM():
     def __init__(self,model=None,
                       output_file=None,
                       mode='interpolate',
-                      number_of_features=4,
-                      model_interface=Moses,
                       reference_interface=Moses_Alignment,
                       reference_file=None,
                       lang_src=None,
                       lang_target=None,
                       output_lexical=None,
-                      **flags):
+                      ):
 
         self.mode = mode
+        self.model = model # the model file
         self.output_file = output_file
         self.lang_src = lang_src
         self.lang_target = lang_target
         self.loaded = defaultdict(int)
         self.output_lexical = output_lexical
-        self.flags = copy.copy(self.flags)
-        self.flags.update(flags)
+
+    def _combine_TM(self,flag=False,prev_line=None):
+        '''
+        Summing up the probability
+        Get the unification of alignment
+        Get the sum of counts
+        '''
+        output_object = handle_file(self.output_file,'open',mode='w')
+        for line in self.model:
+            line = self._load_line(line)
+            if (flag):
+                if (line[0] == prev_line[0] and line[1] == prev_line[1]):
+                    # combine current sentence to previous sentence, return previous sentence
+                    prev_line = combine_sum(self, prev_line=prev_line, cur_line=line)
+                    continue
+                else:
+                # when you get out of the identical blog, print your previous sentence
+                    outline = self._write_phrasetable_file(prev_line)
+                    output_object.write(outline)
+                    flag = False
+
+            elif (prev_line):
+                if (line[0] == prev_line[0] and line[1] == prev_line[1]):
+                # if you see a second sentence in a block, turn flag to True and combine
+                    flag = True
+                else:
+                    outline = self._write_phrasetable_file(prev_line)
+                    output_object.write(outline)
+            prev_line = line
+        if (prev_line):
+            outline = self._write_phrasetable_file(prev_line)
+            output_object.write(outline)
+
+        handle_file(self.output_file,'close',output_object,mode='w')
+
+    def _combine_sum(self,prev_line=None,cur_line=None):
+        '''
+        Summing up the probability
+        Get the unification of alignment
+        Get the sum of counts
+        '''
+        # probability
+        for i in range(4):
+            prev_line[2][i] += cur_line[2][i]
+        # alignment
+        for src,key in cur_line[3]:
+            for tgt in key:
+                if (tgt not in prev_line[3][src]):
+                    prev_line[3][src].append(tgt)
+        # count
+        if (cur_line[4][0] != prev_line[4][0] or cur_line[4][1] != prev_line[4][1]):
+            sys.exit(1)
+        else:
+            prev_line[4][2] += cur_line[4][2]
+        return prev_line
 
 
+    def _load_line(self,line):
+        if (not line):
+            return None
+        ''' This function convert a string into an array of string and probability
+            TODO: something wrong here with input:
+            ['% of cases ; whereas', '% p\xc5\x99\xc3\xadpad\xc5\xaf ; vzhledem k tomu ,', '1 0.000339721 0.5 0.0122099 2.718', '||| 1 2 1']
+        '''
+        #print "line : ", line
+        line = line.rstrip().split(b'|||')
+        if line[-1].endswith(b' |||'):
+            line[-1] = line[-1][:-4]
+            line.append(b'')
+
+        # remove the blank space
+        line[0] = line[0].strip()
+        line[1] = line[1].strip()
+
+        # break the probability
+        line[2]  = [float(i) for i in line[2].strip().split(b' ')]
+
+        # break the alignment
+        phrase_align = defaultdict(lambda: []*3)
+        for pair in line[3].strip().split(b' '):
+            s,t = pair.split(b'-')
+            s,t = int(s),int(t)
+            phrase_align[s].append(t)
+        line[3] = phrase_align
+        # break the count
+        line[4] = [int(i) for i in line[4].strip().split(b' ')]
+
+        return line
+    def _write_phrasetable_file(self,line):
+        # convert data to appropriate format
+        # probability
+        src,tgt,features,alignment,word_counts = line[:5]
+        features = b' '.join([b'%.6g' %(f) for f in features])
+
+        alignments = []
+        for src_id,tgt_id_list in alignment.iteritems():
+            for tgt_id in sorted(tgt_id_list):
+                alignments.append(str(src_id) + '-' + str(tgt_id))
+        extra_space = b''
+        if(len(alignments)):
+            extra_space = b' '
+        alignments = b' '.join(str(x) for x in alignments)
+
+        word_counts = b' '.join(str(x) for x in word_counts)
+
+        line = b"%s ||| %s ||| %s ||| %s%s||| %s ||| |||\n" %(src,tgt,features,alignments,extra_space,word_counts)
+        return line
 
 
 class Triangulate_TMs():
@@ -376,13 +478,13 @@ class Triangulate_TMs():
             else:
                 # out of the matching reason
                 # process the maching part
-                self._sum_combine()
+                self._combine()
                 # now process as usual
         # checking line1, line2
         # TODO: There might be a bug, not loading all file --> check
         if (not line1 or not line2):
             #self.phrase_equal = defaultdict(lambda: []*3)
-            self._sum_combine_and_print(output_object)
+            self._combine_and_print(output_object)
             return None
 
 
@@ -427,12 +529,12 @@ class Triangulate_TMs():
                     # out of the matching reason
                     # process the maching part
                     #print line1, line2
-                    self._sum_combine_and_print(output_object)
+                    self._combine_and_print(output_object)
 
             # handle if the matching is found
             if (not line1 or not line2):
                 #self.phrase_equal = defaultdict(lambda: []*3)
-                self._sum_combine_and_print(output_object)
+                self._combine_and_print(output_object)
                 sys.stderr.write("Finish loading\n")
                 return None
 
@@ -451,14 +553,11 @@ class Triangulate_TMs():
                     #self.phrase_equal[2].append(line2)
                     #self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
 
-
-
-
         #for line1 in model1[0]:
         #    print line1
 
 
-    def _sum_combine_and_print(self,output_object):
+    def _combine_and_print(self,output_object):
         ''' Follow Cohn at el.2007
         The conditional over the source-target pair is: p(s|t) = sum_i p(s|i,t)p(i|t) = sum_i p(s|i)p(i|t)
         in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
@@ -504,7 +603,7 @@ class Triangulate_TMs():
         self.phrase_equal = defaultdict(lambda: []*3)
 
 
-    def _sum_combine(self):
+    def _combine(self):
         ''' Follow Cohn at el.2007
         The conditional over the source-target pair is: p(s|t) = sum_i p(s|i,t)p(i|t) = sum_i p(s|i)p(i|t)
         in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
@@ -566,15 +665,19 @@ class Triangulate_TMs():
     def _get_word_counts(self,src,target,count1,count2):
         """from the Moses phrase table word count info in the form "1000 10 10",
            get the counts for src, tgt
+           the word count is: target - src - both
         """
         #TODO: Check again if this merge makes sense
         #phrase_align = defaultdict(lambda: defaultdict(lambda: []))
         count1 = count1.split(b' ')
         count2 = count2.split(b' ')
-        self.phrase_word_counts[src][target][0] = max(self.phrase_word_counts[src][target][0], count1[1])
-        self.phrase_word_counts[src][target][1] = max(self.phrase_word_counts[src][target][0], count2[1])
+        self.phrase_word_counts[src][target][0] = count2[0]
+        self.phrase_word_counts[src][target][1] = count1[0]
+
+        #self.phrase_word_counts[src][target][0] = max(self.phrase_word_counts[src][target][0], count1[1])
+        #self.phrase_word_counts[src][target][1] = max(self.phrase_word_counts[src][target][0], count2[1])
         if (len(count1) > 2):
-            self.phrase_word_counts[src][target][2] = max(self.phrase_word_counts[src][target][0], min(count1[2],count2[2]))
+            self.phrase_word_counts[src][target][2] = min(count1[2],count2[2])
         return 1
 
 
@@ -727,5 +830,9 @@ if __name__ == "__main__":
         # sort the file
         newfile = sort_file(combiner.output_file,tempdir="/net/cluster/TMP/thoang/")
         print "sorted file", newfile
-        # combine the file
-
+        os.remove(combiner.output_file)
+        # combine the new file
+        merger = Merge_TM(model=newfile,
+                          output_file=combiner.output_file,
+                          mode=combiner.mode)
+        merger._combine_TM()
