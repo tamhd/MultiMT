@@ -218,11 +218,12 @@ class Merge_TM():
                 s,t = int(s),int(t)
                 phrase_align[s].append(t)
             except:
+                print "Infeasible pair ", pair
                 pass
-                #print "Infeasible pair ", pair
         line[3] = phrase_align
         # break the count
-        line[4] = [int(i) for i in line[4].strip().split(b' ')]
+        # sometimes, the count is too big
+        line[4] = [long(float(i)) for i in line[4].strip().split(b' ')]
 
         return line
     def _write_phrasetable_file(self,line):
@@ -238,9 +239,9 @@ class Merge_TM():
         extra_space = b''
         if(len(alignments)):
             extra_space = b' '
-        alignments = b' '.join(str(x) for x in alignments)
+        alignments = b' '.join([b'%.6g' %(f) for f in alignments])
 
-        word_counts = b' '.join(str(x) for x in word_counts)
+        word_counts = b' '.join([b'%.6g' %(f) for f in word_counts])
 
         line = b"%s ||| %s ||| %s ||| %s%s||| %s ||| |||\n" %(src,tgt,features,alignments,extra_space,word_counts)
         return line
