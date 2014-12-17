@@ -131,13 +131,22 @@ class Merge_TM():
         Get the unification of alignment
         Get the sum of counts
         '''
+        prev_line = []
         output_object = handle_file(self.output_file,'open',mode='w')
+        count = 0
+        sys.stderr.write("Start merging multiple lines ...")
+
         for line in self.model:
+            # print counting lines
+            if not count%100000:
+                sys.stderr.write(str(count)+'...')
+            count+=1
+
             line = self._load_line(line)
             if (flag):
                 if (line[0] == prev_line[0] and line[1] == prev_line[1]):
                     # combine current sentence to previous sentence, return previous sentence
-                    prev_line = combine_sum(self, prev_line=prev_line, cur_line=line)
+                    prev_line_tmp = self._combine_sum(prev_line, line)
                     continue
                 else:
                 # when you get out of the identical blog, print your previous sentence
@@ -169,7 +178,7 @@ class Merge_TM():
         for i in range(4):
             prev_line[2][i] += cur_line[2][i]
         # alignment
-        for src,key in cur_line[3]:
+        for src,key in cur_line[3].iteritems():
             for tgt in key:
                 if (tgt not in prev_line[3][src]):
                     prev_line[3][src].append(tgt)
@@ -204,9 +213,13 @@ class Merge_TM():
         # break the alignment
         phrase_align = defaultdict(lambda: []*3)
         for pair in line[3].strip().split(b' '):
-            s,t = pair.split(b'-')
-            s,t = int(s),int(t)
-            phrase_align[s].append(t)
+            try:
+                s,t = pair.split(b'-')
+                s,t = int(s),int(t)
+                phrase_align[s].append(t)
+            except:
+                pass
+                #print "Infeasible pair ", pair
         line[3] = phrase_align
         # break the count
         line[4] = [int(i) for i in line[4].strip().split(b' ')]
@@ -829,7 +842,7 @@ if __name__ == "__main__":
         combiner.combine_standard()
         # sort the file
         newfile = sort_file(combiner.output_file,tempdir="/net/cluster/TMP/thoang/")
-        print "sorted file", newfile
+        #print "sorted file", newfile
         os.remove(combiner.output_file)
         # combine the new file
         merger = Merge_TM(model=newfile,
