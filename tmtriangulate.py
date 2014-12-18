@@ -194,8 +194,6 @@ class Merge_TM():
         if (not line):
             return None
         ''' This function convert a string into an array of string and probability
-            TODO: something wrong here with input:
-            ['% of cases ; whereas', '% p\xc5\x99\xc3\xadpad\xc5\xaf ; vzhledem k tomu ,', '1 0.000339721 0.5 0.0122099 2.718', '||| 1 2 1']
         '''
         #print "line : ", line
         line = line.rstrip().split(b'|||')
@@ -218,7 +216,7 @@ class Merge_TM():
                 s,t = int(s),int(t)
                 phrase_align[s].append(t)
             except:
-                print "Infeasible pair ", pair
+                #print "Infeasible pair ", pair
                 pass
         line[3] = phrase_align
         # break the count
@@ -242,8 +240,7 @@ class Merge_TM():
         extra_space = b''
         if(len(alignments)):
             extra_space = b' '
-        #alignments = b' '.join([b'%.6g' %(f) for f in alignments])
-        alignments = b' '.join(alignments)
+        alignments = b' '.join(str(x) for x in alignments)
 
         word_counts = b' '.join([b'%.6g' %(f) for f in word_counts])
 
@@ -429,16 +426,6 @@ class Triangulate_TMs():
             self._write_phrasetable(model1, model2, output_object)
             handle_file(self.output_file,'close',output_object,mode='w')
 
-    def _get_nextline(self,model):
-        ''' This function get the next line in file
-            without reading the file
-        '''
-        for line in model[0]:
-            return line
-        return None
-
-
-
     def _load_line(self,line):
         if (not line):
             return None
@@ -452,73 +439,7 @@ class Triangulate_TMs():
             line[-1] = line[-1][:-4]
             line.append(b'')
 
-        # remove the blank space
-        #for i in range(len(line)):
-        #    line[i] = line[i].strip()
-        #print "line after: ", line
         return line
-    #TODO: Hey bitch, you have to write more than one function to combine phrase_table
-    # get the sum
-    # get the maximum
-    # now go to bed
-
-    def _phrasetable_traverse(self,model1,model2,prev_line1,prev_line2,deci,output_object,iteration):
-        '''
-        Recursively walk through two model, select the matching pair
-        deci = 1 : read next line of model 1
-        deci = 2 : read next line of model 2
-        deci = 0 : begining, read next line of both
-        '''
-        if (not iteration % 100000):
-            sys.stderr.write(str(iteration)+"...")
-        # loading line1, line2
-        if (deci == 0):
-            line1 = self._load_line(self._get_nextline(model1))
-            line2 = self._load_line(self._get_nextline(model2))
-        elif (deci == 1):
-            line1 = self._load_line(self._get_nextline(model1))
-            line2 = prev_line2
-
-        elif (deci == 2):
-            line1 = prev_line1
-            line2 = self._load_line(self._get_nextline(model2))
-        else:
-            sys.stderr.write("We done have this option in combining phrase table")
-            sys.exit("Incorrect option in combining phrasetable")
-       # check if the key is in the list
-        if (self.phrase_equal[0]):
-            if (line1 and line1[0] == self.phrase_equal[0]):
-                self.phrase_equal[1].append(line1)
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=1, output_object=output_object, iteration=iteration+1)
-            elif (line2 and line2[0] == self.phrase_equal[0]):
-                self.phrase_equal[2].append(line2)
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=2, output_object=output_object, iteration=iteration+1)
-            else:
-                # out of the matching reason
-                # process the maching part
-                self._combine()
-                # now process as usual
-        # checking line1, line2
-        # TODO: There might be a bug, not loading all file --> check
-        if (not line1 or not line2):
-            #self.phrase_equal = defaultdict(lambda: []*3)
-            self._combine_and_print(output_object)
-            return None
-
-
-        if (not self.phrase_equal[0]):
-            if (line1[0] < line2[0]):
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=1,output_object=output_object, iteration=iteration+1)
-            elif (line1[0] > line2[0]):
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
-            elif (line1[0] == line2[0]):
-                # just print all of them
-                #print "Match: ", line1, line2
-                #self._phrasetable_traverse(model1, model2, line1, line2, deci=2)
-                self.phrase_equal[0] = line1[0]
-                #self.phrase_equal[1].append(line1)
-                self.phrase_equal[2].append(line2)
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
 
 
     def _phrasetable_traversal(self,model1,model2,prev_line1,prev_line2,deci,output_object,iteration):
@@ -593,18 +514,10 @@ class Triangulate_TMs():
                 # A-C = A|C|P(A|C) L(A|C) P(C|A) L(C|A)
                 ## B-C = B|C|P(B|C) L(B|C) P(C|B) L(C|B)
 
-                self.phrase_probabilities[src][tgt][0] = phrase1[2][2] * phrase2[2][0]
-                self.phrase_probabilities[src][tgt][1] = phrase1[2][3] * phrase2[2][1]
-                self.phrase_probabilities[src][tgt][2] = phrase1[2][0] * phrase2[2][2]
-                self.phrase_probabilities[src][tgt][3] = phrase1[2][1] * phrase2[2][3]
-
-                self._get_word_alignments(src, tgt, phrase1[3].strip(), phrase2[3].strip())
-                self._get_word_counts(src, tgt, phrase1[4].strip(), phrase2[4].strip())
-
-        #print the output
-        for src in sorted(self.phrase_probabilities):
-            for tgt in sorted(self.phrase_probabilities[src]):
-                outline =  self._write_phrasetable_file(src,tgt,self.phrase_probabilities[src][tgt],self.phrase_alignments[src][tgt],self.phrase_word_counts[src][tgt])
+                features = self._get_features(src, tgt, phrase1[2], phrase2[2])
+                word_alignments = self._get_word_alignments(src, tgt, phrase1[3].strip(), phrase2[3].strip())
+                word_counts = self._get_word_counts(src, tgt, phrase1[4].strip(), phrase2[4].strip())
+                outline =  self._write_phrasetable_file(src,tgt,features,word_alignments,word_counts)
                 output_object.write(outline)
 
         # reset the memory
@@ -617,65 +530,47 @@ class Triangulate_TMs():
 
         self.phrase_equal = defaultdict(lambda: []*3)
 
+    def _get_features(self,src,target,feature1,feature2):
+        """from the Moses phrase table probability, get the new probability
+           TODO: the phrase penalty?
+        """
+        phrase_features =  [0]*4
+        phrase_features[0] = feature1[2] * feature2[0]
+        phrase_features[1] = feature1[3] * feature2[1]
+        phrase_features[2] = feature1[0] * feature2[2]
+        phrase_features[3] = feature1[1] * feature2[3]
+        #self.phrase_probabilities[src][tgt][0] = phrase1[2][2] * phrase2[2][0]
+        #self.phrase_probabilities[src][tgt][1] = phrase1[2][3] * phrase2[2][1]
+        #self.phrase_probabilities[src][tgt][2] = phrase1[2][0] * phrase2[2][2]
+        #self.phrase_probabilities[src][tgt][3] = phrase1[2][1] * phrase2[2][3]
 
-    def _combine(self):
-        ''' Follow Cohn at el.2007
-        The conditional over the source-target pair is: p(s|t) = sum_i p(s|i,t)p(i|t) = sum_i p(s|i)p(i|t)
-        in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
-        THINK ABOUT HOW TO PROGRAM ALL OF THOSE THING IN MODEL.INTERFACE
-        '''
-        for phrase1 in self.phrase_equal[1]:
-            for phrase2 in self.phrase_equal[2]:
-                if (phrase1[0] != phrase2[0]):
-                    sys.exit("THE PIVOTS ARE DIFFERENT")
-                print "Matching : ", phrase1, phrase2
-                src = phrase1[1]
-                tgt = phrase2[1]
-                if (not isinstance(phrase1[2],list)):
-                    phrase1[2] = [float(i) for i in phrase1[2].split()]
-                if (not isinstance(phrase2[2],list)):
-                    phrase2[2] = [float(j) for j in phrase2[2].split()]
-                #self.phrase_probabilities=[0]*4
-                self.phrase_probabilities[src][tgt][0] = phrase1[2][2] * phrase2[2][0]
-                self.phrase_probabilities[src][tgt][1] = phrase1[2][3] * phrase2[2][1]
-                self.phrase_probabilities[src][tgt][2] = phrase1[2][0] * phrase2[2][2]
-                self.phrase_probabilities[src][tgt][3] = phrase1[2][1] * phrase2[2][3]
-                #self.phrase_probabilities[src][tgt][0] += phrase_prob[0]
+        return phrase_features
 
-                self._get_word_alignments(src, tgt, phrase1[3], phrase2[3])
-                self._get_word_counts(src, tgt, phrase1[4], phrase2[4])
-                # print self.phrase_alignments[src][tgt]
-                # A-B = A|B|P(A|B) L(A|B) P(B|A) L(B|A)
-                # A-C = A|C|P(A|C) L(A|C) P(C|A) L(C|A)
-                ## B-C = B|C|P(B|C) L(B|C) P(C|B) L(C|B)
-        self.phrase_equal = defaultdict(lambda: []*3)
 
     def _get_word_alignments(self,src,target,align1,align2):
         """from the Moses phrase table alignment info in the form "0-0 1-0",
            get the aligned word pairs / NULL alignments
         """
-        phrase_align = defaultdict(lambda: defaultdict(lambda: []))
+        phrase_align = defaultdict(lambda: []*3)
         # fill value to the phrase_align
         try:
             for pair in align1.split(b' '):
                 p,s = pair.split(b'-')
                 p,s = int(p),int(s)
-                phrase_align[p][0].append(s)
+                phrase_align[0].append(s)
             for pair in align2.split(b' '):
                 p,t = pair.split(b'-')
                 p,t = int(p),int(s)
-                phrase_align[p][1].append(t)
+                phrase_align[1].append(t)
         except:
             pass
-            #print "align1: ", align1, " alien2:", align2 , "<------- problem"
-        #print phrase_align
-        for pivot,dic in phrase_align.iteritems():
-            #print "pivot", pivot, dic
-            for src_id in dic[0]:
-                for tgt_id in dic[1]:
-                    if (tgt_id not in self.phrase_alignments[src][target][src_id]):
-                        self.phrase_alignments[src][target][src_id].append(tgt_id)
-        return 1
+        phrase_align[2] = defaultdict(lambda: []*3)
+        for src_id in phrase_align[0]:
+            for tgt_id in phrase_align[1]:
+                if (tgt_id not in phrase_align[2][src_id]):
+                    phrase_align[2][src_id].append(tgt_id)
+
+        return phrase_align[2]
 
 
     def _get_word_counts(self,src,target,count1,count2):
@@ -683,18 +578,15 @@ class Triangulate_TMs():
            get the counts for src, tgt
            the word count is: target - src - both
         """
-        #TODO: Check again if this merge makes sense
-        #phrase_align = defaultdict(lambda: defaultdict(lambda: []))
+        word_count = [0]*3
         count1 = count1.split(b' ')
         count2 = count2.split(b' ')
-        self.phrase_word_counts[src][target][0] = long(float(count2[0]))
-        self.phrase_word_counts[src][target][1] = long(float(count1[0]))
+        word_count[0] = long(float(count2[0]))
+        word_count[1] = long(float(count1[0]))
 
-        #self.phrase_word_counts[src][target][0] = max(self.phrase_word_counts[src][target][0], count1[1])
-        #self.phrase_word_counts[src][target][1] = max(self.phrase_word_counts[src][target][0], count2[1])
         if (len(count1) > 2):
-            self.phrase_word_counts[src][target][2] = min(long(float(count1[2])),long(float(count2[2])))
-        return 1
+            word_count[2] = min(long(float(count1[2])),long(float(count2[2])))
+        return word_count
 
 
     def _write_phrasetable(self,model1,model2,output_object,inverted=False):
@@ -735,9 +627,7 @@ class Triangulate_TMs():
         extra_space = b''
         if(len(alignments)):
             extra_space = b' '
-        alignments = b' '.join(alignments)
-        #word_counts = b' '.join(str(x) for x in word_counts)
-        #alignments = b' '.join([b'%.6g' %(f) for f in alignments])
+        alignments = b' '.join(str(x) for x in alignments)
 
         word_counts = b' '.join([b'%.6g' %(f) for f in word_counts])
 
