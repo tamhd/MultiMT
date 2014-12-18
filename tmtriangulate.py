@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# ./naive_triangulate.py combine_given_weights test/model1 test/model2 -ps test/model1 -pt test/model2 -o test/phrase-table_sample
+# ./tmtriangulate.py combine_given_weights -ps test/model1 -pt test/model2 -o test/phrase-table_sample
 #  This class implement a naive method for triangulation: nothing
 #  The most important part of this method is to initialize variables
 
@@ -23,16 +23,13 @@ except:
     izip = zip
 
 def parse_command_line():
-    parser = argparse.ArgumentParser(description='Combine translation models. Check DOCSTRING of the class Combine_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples.')
+    parser = argparse.ArgumentParser(description='Combine translation models. Check DOCSTRING of the class Triangulate_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples.')
 
     group1 = parser.add_argument_group('Main options')
     group2 = parser.add_argument_group('More model combination options')
 
     group1.add_argument('action', metavar='ACTION', choices=["combine_given_weights","combine_given_tuning_set","combine_reordering_tables","compute_cross_entropy","return_best_cross_entropy","compare_cross_entropies"],
                     help='What you want to do with the models. One of %(choices)s.')
-
-    #group1.add_argument('model', metavar='DIRECTORY', nargs='+',
-    #                help='Model directory. Assumes default Moses structure (i.e. path to phrase table and lexical tables).')
 
     group1.add_argument('-ps', metavar='DIRECTORY', dest='srcpvt',
                     help='model of the source and pivot, actually, it is going to be pivot-source')
@@ -47,7 +44,7 @@ def parse_command_line():
     group1.add_argument('-m', '--mode', type=str,
                     default="interpolate",
                     choices=["counts","interpolate","loglinear"],
-                    help='basic mixture-model algorithm. Default: %(default)s. Note: depending on mode and additional configuration, additional statistics are needed. Check docstring documentation of Combine_TMs() for more info.')
+                    help='basic mixture-model algorithm. Default: %(default)s. Note: depending on mode and additional configuration, additional statistics are needed. Check docstring documentation of Triangulate_TMs() for more info.')
 
     group1.add_argument('-r', '--reference', type=str,
                     default=None,
@@ -100,7 +97,7 @@ def parse_command_line():
     return parser.parse_args()
 
 
-class Combine_TMs():
+class Triangulate_TMs():
     """This class handles the various options, checks them for sanity and has methods that define what models to load and what functions to call for the different tasks.
        Typically, you only need to interact with this class and its attributes.
 
@@ -277,13 +274,7 @@ class Combine_TMs():
             output_object = handle_file(self.output_file,'open',mode='w')
             self._write_phrasetable(model1, model2, output_object)
             handle_file(self.output_file,'close',output_object,mode='w')
-        pass
-        # I AM HERE
-        if self.output_lexical:
-            sys.stderr.write('Writing lexical tables\n')
-            self._ensure_loaded(['lexical'])
-            self.model_interface.write_lexical_file('e2f',self.output_lexical,weights[1],self.mode)
-            self.model_interface.write_lexical_file('f2e',self.output_lexical,weights[3],self.mode)
+
     def _get_nextline(self,model):
         ''' This function get the next line in file
             without reading the file
@@ -308,13 +299,15 @@ class Combine_TMs():
     # get the maximum
     # now go to bed
 
-    def _phrasetable_traverse(self,model1,model2,prev_line1,prev_line2,deci):
+    def _phrasetable_traverse(self,model1,model2,prev_line1,prev_line2,deci,output_object,iteration):
         '''
         Recursively walk through two model, select the matching pair
         deci = 1 : read next line of model 1
         deci = 2 : read next line of model 2
         deci = 0 : begining, read next line of both
         '''
+        if (not iteration % 100000):
+            sys.stderr.write(str(iteration)+"...")
         # loading line1, line2
         if (deci == 0):
             line1 = self._load_line(self._get_nextline(model1))
@@ -333,10 +326,10 @@ class Combine_TMs():
         if (self.phrase_equal[0]):
             if (line1 and line1[0] == self.phrase_equal[0]):
                 self.phrase_equal[1].append(line1)
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=1)
+                self._phrasetable_traverse(model1, model2, line1, line2, deci=1, output_object=output_object, iteration=iteration+1)
             elif (line2 and line2[0] == self.phrase_equal[0]):
                 self.phrase_equal[2].append(line2)
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=2)
+                self._phrasetable_traverse(model1, model2, line1, line2, deci=2, output_object=output_object, iteration=iteration+1)
             else:
                 # out of the matching reason
                 # process the maching part
@@ -346,15 +339,15 @@ class Combine_TMs():
         # TODO: There might be a bug, not loading all file --> check
         if (not line1 or not line2):
             #self.phrase_equal = defaultdict(lambda: []*3)
-            self._sum_combine()
+            self._sum_combine_and_print(output_object)
             return None
 
 
         if (not self.phrase_equal[0]):
             if (line1[0] < line2[0]):
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=1)
+                self._phrasetable_traverse(model1, model2, line1, line2, deci=1,output_object=output_object, iteration=iteration+1)
             elif (line1[0] > line2[0]):
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=2)
+                self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
             elif (line1[0] == line2[0]):
                 # just print all of them
                 #print "Match: ", line1, line2
@@ -362,7 +355,53 @@ class Combine_TMs():
                 self.phrase_equal[0] = line1[0]
                 #self.phrase_equal[1].append(line1)
                 self.phrase_equal[2].append(line2)
-                self._phrasetable_traverse(model1, model2, line1, line2, deci=2)
+                self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
+    def _sum_combine_and_print(self,output_object):
+        ''' Follow Cohn at el.2007
+        The conditional over the source-target pair is: p(s|t) = sum_i p(s|i,t)p(i|t) = sum_i p(s|i)p(i|t)
+        in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
+        After combining two phrase-table, print them right after it
+        '''
+        for phrase1 in self.phrase_equal[1]:
+            for phrase2 in self.phrase_equal[2]:
+                if (phrase1[0] != phrase2[0]):
+                    sys.exit("THE PIVOTS ARE DIFFERENT")
+                print "Matching : ", phrase1, phrase2
+                src = phrase1[1]
+                tgt = phrase2[1]
+                if (not isinstance(phrase1[2],list)):
+                    phrase1[2] = [float(i) for i in phrase1[2].split()]
+                if (not isinstance(phrase2[2],list)):
+                    phrase2[2] = [float(j) for j in phrase2[2].split()]
+                #self.phrase_probabilities=[0]*4
+                # A-B = A|B|P(A|B) L(A|B) P(B|A) L(B|A)
+                # A-C = A|C|P(A|C) L(A|C) P(C|A) L(C|A)
+                ## B-C = B|C|P(B|C) L(B|C) P(C|B) L(C|B)
+
+                self.phrase_probabilities[src][tgt][0] = phrase1[2][2] * phrase2[2][0]
+                self.phrase_probabilities[src][tgt][1] = phrase1[2][3] * phrase2[2][1]
+                self.phrase_probabilities[src][tgt][2] = phrase1[2][0] * phrase2[2][2]
+                self.phrase_probabilities[src][tgt][3] = phrase1[2][1] * phrase2[2][3]
+
+                self._get_word_alignments(src, tgt, phrase1[3], phrase2[3])
+                self._get_word_counts(src, tgt, phrase1[4], phrase2[4])
+
+        #print the output
+        for src in sorted(self.phrase_probabilities):
+            for tgt in sorted(self.phrase_probabilities[src]):
+                outline =  self._write_phrasetable_file(src,tgt,self.phrase_probabilities[src][tgt],self.phrase_alignments[src][tgt],self.phrase_word_counts[src][tgt])
+                output_object.write(outline)
+
+        # reset the memory
+        self.phrase_equal = defaultdict(lambda: []*3)
+        self.phrase_probabilities = defaultdict(lambda: defaultdict(lambda: [0]*4)) # 0.4 1 0.5 0.4
+        self.phrase_word_counts = defaultdict(lambda: defaultdict(lambda: [0]*3)) # 1000 10 10
+        self.phrase_alignments =  defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: []))) # 0-0 1-2
+        #TODO: Check above process of calculating probabilities
+
+
+        self.phrase_equal = defaultdict(lambda: []*3)
+
 
     def _sum_combine(self):
         ''' Follow Cohn at el.2007
@@ -445,21 +484,20 @@ class Combine_TMs():
         if self.mode == 'interpolate' and not self.flags['normalized']:
             store_flag = 'pairs'
 
-        i = 0
         sys.stderr.write('Incrementally loading and processing phrase tables...')
         # Start process phrase table
         self.phrase_equal = defaultdict(lambda: []*3)
         self.phrase_probabilities = defaultdict(lambda: defaultdict(lambda: [0]*4)) # 0.4 1 0.5 0.4
         self.phrase_word_counts = defaultdict(lambda: defaultdict(lambda: [0]*3)) # 1000 10 10
         self.phrase_alignments =  defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: []))) # 0-0 1-2
-        self._phrasetable_traverse(model1=model1, model2=model2, prev_line1=None, prev_line2=None, deci=0)
+        self._phrasetable_traverse(model1=model1, model2=model2, prev_line1=None, prev_line2=None, deci=0, output_object=output_object,iteration=0)
         #TODO: Check above process of calculating probabilities
 
         # print the output
-        for src in sorted(self.phrase_probabilities):
-            for tgt in sorted(self.phrase_probabilities[src]):
-                outline =  self._write_phrasetable_file(src,tgt,self.phrase_probabilities[src][tgt],self.phrase_alignments[src][tgt],self.phrase_word_counts[src][tgt])
-                output_object.write(outline)
+        #for src in sorted(self.phrase_probabilities):
+        #    for tgt in sorted(self.phrase_probabilities[src]):
+        #        outline =  self._write_phrasetable_file(src,tgt,self.phrase_probabilities[src][tgt],self.phrase_alignments[src][tgt],self.phrase_word_counts[src][tgt])
+        #        output_object.write(outline)
         sys.stderr.write("done")
 
 
@@ -547,7 +585,7 @@ if __name__ == "__main__":
     else:
         args = parse_command_line()
         #initialize
-        combiner = Combine_TMs(weights=args.weights,
+        combiner = Triangulate_TMs(weights=args.weights,
                                model1=args.srcpvt,
                                model2=args.pvttgt,
                                mode=args.mode,
@@ -564,8 +602,5 @@ if __name__ == "__main__":
                                i_f2e=args.i_f2e,
                                i_f2e_lex=args.i_f2e_lex,
                                write_phrase_penalty=args.write_phrase_penalty)
-        # execute right method
-        #f_string = "combiner."+args.action+'()'
-        #exec(f_string)
 
         combiner.combine_standard()
