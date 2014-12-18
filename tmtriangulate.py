@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# ./tmtriangulate.py combine_given_weights -ps test/model1 -pt test/model2 -o test/phrase-table_sample
+# ./tmtriangulate.py combine_given_weights -ps test/model1 -pt test/model2 -o test/phrase-table_sample -t tempdir
 #  This class implement a naive method for triangulation: nothing
 #  The most important part of this method is to initialize variables
 
@@ -25,10 +25,13 @@ except:
     izip = zip
 
 def parse_command_line():
-    parser = argparse.ArgumentParser(description='Combine translation models. Check DOCSTRING of the class Triangulate_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples.')
+
+    parser = argparse.ArgumentParser(description="Combine translation models. Check DOCSTRING of the class Triangulate_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples")
+
 
     group1 = parser.add_argument_group('Main options')
     group2 = parser.add_argument_group('More model combination options')
+    group3 = parser.add_argument_group('Naive triangulation')
 
     group1.add_argument('action', metavar='ACTION', choices=["combine_given_weights","combine_given_tuning_set","combine_reordering_tables","compute_cross_entropy","return_best_cross_entropy","compare_cross_entropies"],
                     help='What you want to do with the models. One of %(choices)s.')
@@ -67,6 +70,11 @@ def parse_command_line():
                     default=None,
                     help=('Temporary directory in --lowmem mode.'))
 
+    group1.add_argument('-t', '--tempdir2', dest='tempdir2', type=str,
+                    default=None,
+                    help=('Temporary directory to put the intermediate phrase'))
+
+
     group2.add_argument('--i_e2f', type=int,
                     default=0, metavar='N',
                     help=('Index of p(f|e) (relevant for mode counts if phrase table has custom feature order). (default: %(default)s)'))
@@ -95,6 +103,10 @@ def parse_command_line():
 
     group2.add_argument('--recompute_lexweights', action="store_true",
                     help=('don\'t directly interpolate lexical weights, but interpolate word translation probabilities instead and recompute the lexical weights. Only relevant in mode "interpolate".'))
+
+    group3.add_argument('--command', '--./tmtriangulate.py combine_given_weights -ps model1 -pt model2 -o output_phrasetable -t tempdir', action="store_true",
+                    help=('If you wish to run the naive approach, the command above would work, in which: model1 = pivot-source model, model2 = pivot-target model'))
+
 
     return parser.parse_args()
 
@@ -165,7 +177,7 @@ class Merge_TM():
         if (prev_line):
             outline = self._write_phrasetable_file(prev_line)
             output_object.write(outline)
-
+        output_object.write("Done\n")
         handle_file(self.output_file,'close',output_object,mode='w')
 
     def _combine_sum(self,prev_line=None,cur_line=None):
@@ -451,8 +463,6 @@ class Triangulate_TMs():
         if (not line):
             return None
         ''' This function convert a string into an array of string and probability
-            TODO: something wrong here with input:
-            ['% of cases ; whereas', '% p\xc5\x99\xc3\xadpad\xc5\xaf ; vzhledem k tomu ,', '1 0.000339721 0.5 0.0122099 2.718', '||| 1 2 1']
         '''
         #print "line : ", line
         line = line.rstrip().split(b'|||')
@@ -544,13 +554,12 @@ class Triangulate_TMs():
         # reset the memory
         self.phrase_equal = None
         self.phrase_equal = defaultdict(lambda: []*3)
-        #TODO: Check above process of calculating probabilities
 
         self.phrase_equal = defaultdict(lambda: []*3)
 
     def _get_features(self,src,target,feature1,feature2):
         """from the Moses phrase table probability, get the new probability
-           TODO: the phrase penalty?
+           TODO: the phrase penalty value?
         """
         phrase_features =  [0]*4
         phrase_features[0] = feature1[2] * feature2[0]
@@ -620,7 +629,6 @@ class Triangulate_TMs():
         # Start process phrase table
         self.phrase_equal = defaultdict(lambda: []*3)
         self._phrasetable_traversal(model1=model1, model2=model2, prev_line1=None, prev_line2=None, deci=0, output_object=output_object,iteration=0)
-        #TODO: Check above process of calculating probabilities
 
         sys.stderr.write("done")
 
@@ -746,11 +754,12 @@ if __name__ == "__main__":
         # write everything to a file
         combiner.combine_standard()
         # sort the file
-        newfile = sort_file(combiner.output_file,tempdir="/net/cluster/TMP/thoang/")
+        #newfile = sort_file(combiner.output_file,tempdir="/net/cluster/TMP/thoang/")
+        tmpfile = sort_file(combiner.output_file,tempdir=args.tempdir2)
         #print "sorted file", newfile
         os.remove(combiner.output_file)
         # combine the new file
-        merger = Merge_TM(model=newfile,
+        merger = Merge_TM(model=tmpfile,
                           output_file=combiner.output_file,
                           mode=combiner.mode)
         merger._combine_TM()
