@@ -189,6 +189,27 @@ class Merge_TM():
             prev_line[4][2] += cur_line[4][2]
         return prev_line
 
+    def _combine_maximum(self,prev_line=None,cur_line=None):
+        '''
+        Get the maximum the probability
+        Get the unification of alignment
+        Get the sum of counts
+        '''
+        # probability
+        for i in range(4):
+            prev_line[2][i] = max(prev_line[2], cur_line[2][i])
+        # alignment
+        for src,key in cur_line[3].iteritems():
+            for tgt in key:
+                if (tgt not in prev_line[3][src]):
+                    prev_line[3][src].append(tgt)
+        # count
+        if (cur_line[4][0] != prev_line[4][0] or cur_line[4][1] != prev_line[4][1]):
+            sys.exit(1)
+        else:
+            prev_line[4][2] += cur_line[4][2]
+        return prev_line
+
 
     def _load_line(self,line):
         if (not line):
