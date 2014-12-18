@@ -453,10 +453,8 @@ class Triangulate_TMs():
             if not count%100000:
                 sys.stderr.write(str(count)+'...')
             count+=1
-            if (count > 300000 and count < 400000):
-                print line1, line2
-            #if (not line1 or not line2):
-            #    break
+            #if (count > 300000 and count < 400000):
+                #print line1, line2
             if (self.phrase_equal[0]):
                 if (line1 and line1[0] == self.phrase_equal[0]):
                     self.phrase_equal[1].append(line1)
@@ -498,6 +496,8 @@ class Triangulate_TMs():
         in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
         After combining two phrase-table, print them right after it
         '''
+        if (len(self.phrase_equal[1]) > 10 and len(self.phrase_equal[2]) > 10):
+            print "Huge match: ", self.phrase_equal[1][0][0], len(self.phrase_equal[1]), len(self.phrase_equal[2])
         for phrase1 in self.phrase_equal[1]:
             for phrase2 in self.phrase_equal[2]:
                 if (phrase1[0] != phrase2[0]):
@@ -521,11 +521,8 @@ class Triangulate_TMs():
                 output_object.write(outline)
 
         # reset the memory
-        self.phrase_equal, self.phrase_probabilities, self.phrase_word_counts, self.phrase_alignments = None, None, None, None
+        self.phrase_equal = None
         self.phrase_equal = defaultdict(lambda: []*3)
-        self.phrase_probabilities = defaultdict(lambda: defaultdict(lambda: [0]*4)) # 0.4 1 0.5 0.4
-        self.phrase_word_counts = defaultdict(lambda: defaultdict(lambda: [0]*3)) # 1000 10 10
-        self.phrase_alignments =  defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: []))) # 0-0 1-2
         #TODO: Check above process of calculating probabilities
 
         self.phrase_equal = defaultdict(lambda: []*3)
@@ -601,17 +598,9 @@ class Triangulate_TMs():
         sys.stderr.write('Incrementally loading and processing phrase tables...')
         # Start process phrase table
         self.phrase_equal = defaultdict(lambda: []*3)
-        self.phrase_probabilities = defaultdict(lambda: defaultdict(lambda: [0]*4)) # 0.4 1 0.5 0.4
-        self.phrase_word_counts = defaultdict(lambda: defaultdict(lambda: [0]*3)) # 1000 10 10
-        self.phrase_alignments =  defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: []))) # 0-0 1-2
         self._phrasetable_traversal(model1=model1, model2=model2, prev_line1=None, prev_line2=None, deci=0, output_object=output_object,iteration=0)
         #TODO: Check above process of calculating probabilities
 
-        # print the output
-        #for src in sorted(self.phrase_probabilities):
-        #    for tgt in sorted(self.phrase_probabilities[src]):
-        #        outline =  self._write_phrasetable_file(src,tgt,self.phrase_probabilities[src][tgt],self.phrase_alignments[src][tgt],self.phrase_word_counts[src][tgt])
-        #        output_object.write(outline)
         sys.stderr.write("done")
 
 
