@@ -227,6 +227,9 @@ class Merge_TM():
 
         return line
     def _write_phrasetable_file(self,line):
+        '''
+        write the phrase table line
+        '''
         # convert data to appropriate format
         # probability
         src,tgt,features,alignment,word_counts = line[:5]
@@ -239,7 +242,8 @@ class Merge_TM():
         extra_space = b''
         if(len(alignments)):
             extra_space = b' '
-        alignments = b' '.join([b'%.6g' %(f) for f in alignments])
+        #alignments = b' '.join([b'%.6g' %(f) for f in alignments])
+        alignments = b' '.join(alignments)
 
         word_counts = b' '.join([b'%.6g' %(f) for f in word_counts])
 
@@ -528,6 +532,8 @@ class Triangulate_TMs():
             if not count%100000:
                 sys.stderr.write(str(count)+'...')
             count+=1
+            if (count > 300000 and count < 400000):
+                print line1, line2
             #if (not line1 or not line2):
             #    break
             if (self.phrase_equal[0]):
@@ -556,20 +562,14 @@ class Triangulate_TMs():
             if (not self.phrase_equal[0]):
                 if (line1[0] == line2[0]):
                     self.phrase_equal[0] = line1[0]
-                elif (line1[0] < line2[0] or line1[0].startswith(line2[0])):
-                    print line1, line2
+                elif (line1[0].startswith(line2[0])):
                     line1 = self._load_line(model1[0].readline())
-                elif (line1[0] > line2[0] or line2[0].startswith(line1[0])):
+                elif (line2[0].startswith(line1[0])):
                     line2 = self._load_line(model2[0].readline())
-                    # just print all of them
-                    #print "Match: ", line1, line2
-                    #self.phrase_equal[1].append(line1)
-                    #self.phrase_equal[2].append(line2)
-                    #self._phrasetable_traverse(model1, model2, line1, line2, deci=2,output_object=output_object, iteration=iteration+1)
-
-        #for line1 in model1[0]:
-        #    print line1
-
+                elif (line1[0] < line2[0]):
+                    line1 = self._load_line(model1[0].readline())
+                elif (line1[0] > line2[0]):
+                    line2 = self._load_line(model2[0].readline())
 
     def _combine_and_print(self,output_object):
         ''' Follow Cohn at el.2007
@@ -608,6 +608,7 @@ class Triangulate_TMs():
                 output_object.write(outline)
 
         # reset the memory
+        self.phrase_equal, self.phrase_probabilities, self.phrase_word_counts, self.phrase_alignments = None, None, None, None
         self.phrase_equal = defaultdict(lambda: []*3)
         self.phrase_probabilities = defaultdict(lambda: defaultdict(lambda: [0]*4)) # 0.4 1 0.5 0.4
         self.phrase_word_counts = defaultdict(lambda: defaultdict(lambda: [0]*3)) # 1000 10 10
@@ -665,7 +666,8 @@ class Triangulate_TMs():
                 p,t = int(p),int(s)
                 phrase_align[p][1].append(t)
         except:
-            print "align1: ", align1, " alien2:", align2 , "<------- problem"
+            pass
+            #print "align1: ", align1, " alien2:", align2 , "<------- problem"
         #print phrase_align
         for pivot,dic in phrase_align.iteritems():
             #print "pivot", pivot, dic
@@ -685,13 +687,13 @@ class Triangulate_TMs():
         #phrase_align = defaultdict(lambda: defaultdict(lambda: []))
         count1 = count1.split(b' ')
         count2 = count2.split(b' ')
-        self.phrase_word_counts[src][target][0] = count2[0]
-        self.phrase_word_counts[src][target][1] = count1[0]
+        self.phrase_word_counts[src][target][0] = long(float(count2[0]))
+        self.phrase_word_counts[src][target][1] = long(float(count1[0]))
 
         #self.phrase_word_counts[src][target][0] = max(self.phrase_word_counts[src][target][0], count1[1])
         #self.phrase_word_counts[src][target][1] = max(self.phrase_word_counts[src][target][0], count2[1])
         if (len(count1) > 2):
-            self.phrase_word_counts[src][target][2] = min(count1[2],count2[2])
+            self.phrase_word_counts[src][target][2] = min(long(float(count1[2])),long(float(count2[2])))
         return 1
 
 
@@ -733,9 +735,11 @@ class Triangulate_TMs():
         extra_space = b''
         if(len(alignments)):
             extra_space = b' '
-        alignments = b' '.join(str(x) for x in alignments)
+        alignments = b' '.join(alignments)
+        #word_counts = b' '.join(str(x) for x in word_counts)
+        #alignments = b' '.join([b'%.6g' %(f) for f in alignments])
 
-        word_counts = b' '.join(str(x) for x in word_counts)
+        word_counts = b' '.join([b'%.6g' %(f) for f in word_counts])
 
         line = b"%s ||| %s ||| %s ||| %s%s||| %s ||| |||\n" %(src,tgt,features,alignments,extra_space,word_counts)
         return line
