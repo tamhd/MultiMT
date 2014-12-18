@@ -1,18 +1,21 @@
-tmtriangulate - a tool for Moses translation with MultiMT
+Directory Manager
 
 Author: Tam Hoang
 
 ABOUT
 -----
-
-The triangulation program handles the combination of Moses phrase tables, but it is not tmcombine. 
-
-The configuration program handles the directory of multi sources (waiting for implementation)
-
-From two phrase model src-pvt and pvt-tgt, the goal is a final src-tvt model
+This is to manage the resources that we have
 
 REQUIREMENTS
 ------------
 
 The script requires Python >= 2.6.
+
+DESCRIPTION
+-----------
+
+For folder 'corpora', each corpus is in a folder associated with the name of its language. 
+The language name consist of two letter, which could be found in the list
+For bilingual corpora, trilingual corpora and more, the language names are sorted by alphabetical 
+
 
