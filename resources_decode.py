@@ -52,20 +52,66 @@ class Decode_Corpora():
         ''' Initialize the value, list all the folder in the directory
         '''
 
-        self.source = mode
+        self.source = source
         self.target = target
         self.cordir = corporadir
         self.output_file = output_file
 
-    # A function I borrow from TM_Combine
+        self._load_config()
+        self._browse_dir()
+
+    def _load_config(self, config_file='config.properties'):
+        '''
+        load the configuration of the whole folder in a file
+        '''
+        return None
+
+    def _browse_dir(self):
+        ''' browse the directory and load a hash table out of those dir
+        '''
+#TODO: There might be a nicer way to concatenate directory
+        print "Browsing directory"
+        self.structure = defaultdict()
+        self.structure[0] = os.path.normpath('/'.join([os.getcwd(), self.cordir]))
+        print self.structure[0]
+        # load all directories inside
+        onlydirs = [d for d in os.listdir(self.structure[0]) if os.path.isdir('/'.join([self.structure[0], d]))]
+        print onlydirs
+
+        # loop through 1st layer directory
+        for dir_f in onlydirs:
+            if (len(dir_f)%2):
+                print "Ignore folder ", dir_f, " because of incorrect format"
+                continue
+            dir_type = len(dir_f)/2
+            self.structure[dir_type] = defaultdict()
+            i = 0
+            languages = []
+            while(i+2 <= len(dir_f)):
+                dir_f2 = dir_f[i:(i+2)]
+                print dir_f2
+                languages.append(dir_f2)
+                i+=2
+            dir_abs = os.path.normpath('/'.join([self.structure[0], dir_f]))
+            onlyfiles = [f for f in os.listdir(dir_abs) if (os.path.isfile('/'.join([dir_abs, f])) and f[:1].isalpha())]
+            print onlyfiles
+            # loop through the 2nd layer of directory
+            if (dir_type == 1):
+                # monolingual folder
+                self.structure[1] = defaultdict(lambda: [])
+                for onlyfile in onlyfiles:
+                    if (onlyfile.endswith(dir_f)):
+                        self.structure[1][dir_f].append(only_file)
+            # bilingual folder
+            for :wq
+#HERE
+
     def _sanity_checks(self):
         """check if the corpora dir is clean, which mean:
            + the folder has to be in the alphabet order
            + in a bilingual directory, there must be an even number of file, in which each pair only different by the language in the folder
         """
         return True
-
-
 
     def _monolingual_find(self):
         """ find all the monolingual corpora for the language model
@@ -157,3 +203,8 @@ if __name__ == "__main__":
         args = parse_command_line()
         #initialize
         print "OK, Let's play!"
+        dc = Decode_Corpora(source=args.source,
+                               target=args.target,
+                               corporadir=args.corporadir,
+                               output_file=args.output_file)
+
