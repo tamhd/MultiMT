@@ -83,7 +83,7 @@ class Decode_Corpora():
             if (len(dir_f)%2):
                 print "Ignore folder ", dir_f, " because of incorrect format"
                 continue
-            dir_type = len(dir_f)/2
+            dir_type = int(len(dir_f)/2)
             self.structure[dir_type] = defaultdict()
             i = 0
             languages = []
@@ -103,8 +103,33 @@ class Decode_Corpora():
                     if (onlyfile.endswith(dir_f)):
                         self.structure[1][dir_f].append(only_file)
             # bilingual folder
-            for :wq
-#HERE
+            if (len(onlyfiles) < dir_type):
+                print "WRONG SIZE", len(onlyfiles), dir_type+1
+            fileslist = sorted(onlyfiles)
+            for file_id in range(len(onlyfiles)-dir_type+1):
+                print len(fileslist[file_id:file_id+dir_type])
+                if (self._check_fileslist(fileslist[file_id:file_id+dir_type], languages, dir_type)):
+                    print "match: ", file_id
+                    print [os.path.normpath('/'.join([dir_abs,f])) for f in fileslist[file_id:file_id+dir_type]]
+
+
+    def _check_fileslist(self, fileslist, languageslist, dir_type):
+        ''' get the list of files which match the languagelist
+        '''
+        if (len(fileslist) != len(languageslist)):
+            print "mistake of matching, you dumb ass"
+            return False
+        for file_f,lang_f in zip(fileslist,languageslist):
+            if (not file_f.endswith("."+lang_f)):
+                return False
+        return True
+
+    def _check_file(self, file_f, lang_f, dir_type):
+        ''' check if the file fit the description
+        '''
+        if (file_f.endswith("."+lang_f)):
+                return True
+        return False
 
     def _sanity_checks(self):
         """check if the corpora dir is clean, which mean:
