@@ -219,7 +219,17 @@ class Decode_Corpora():
                 trilist[pivot].append([srcside,tgtside])
 
         return trilist
+    def _write_ouputfile(self, source, target):
+        ''' Write to a file the format similar to eman traceback of the
+            path from source to target
+        '''
 
+    def _write_indexfile(self):
+        '''
+            Write to the file config.properties the configuration of these structure
+            Next time, it might be better to load this file instead of loading the
+            whole structure
+        '''
 
 
 # GLOBAL DEF
