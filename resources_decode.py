@@ -77,16 +77,16 @@ class Decode_Corpora():
         # load all directories inside
         onlydirs = [d for d in os.listdir(self.structure[0]) if os.path.isdir('/'.join([self.structure[0], d]))]
         print onlydirs
-
+        self.structure[1] = defaultdict(lambda: [])
         # loop through 1st layer directory
         for dir_f in onlydirs:
             if (len(dir_f)%2):
                 print "Ignore folder ", dir_f, " because of incorrect format"
                 continue
             dir_type = int(len(dir_f)/2)
-            self.structure[dir_type] = defaultdict()
             i = 0
             languages = []
+            self.structure[1][dir_f].append(languages)
             while(i+2 <= len(dir_f)):
                 dir_f2 = dir_f[i:(i+2)]
                 print dir_f2
@@ -96,13 +96,14 @@ class Decode_Corpora():
             onlyfiles = [f for f in os.listdir(dir_abs) if (os.path.isfile('/'.join([dir_abs, f])) and f[:1].isalpha())]
             print onlyfiles
             # loop through the 2nd layer of directory
+            # not used anymore
             if (dir_type == 1):
                 # monolingual folder
-                self.structure[1] = defaultdict(lambda: [])
                 for onlyfile in onlyfiles:
                     if (onlyfile.endswith(dir_f)):
-                        self.structure[1][dir_f].append(only_file)
-            # bilingual folder
+                        pass
+                        #self.structure[1][dir_f].append(only_file)
+            #
             if (len(onlyfiles) < dir_type):
                 print "WRONG SIZE", len(onlyfiles), dir_type+1
             fileslist = sorted(onlyfiles)
@@ -110,8 +111,9 @@ class Decode_Corpora():
                 print len(fileslist[file_id:file_id+dir_type])
                 if (self._check_fileslist(fileslist[file_id:file_id+dir_type], languages, dir_type)):
                     print "match: ", file_id
-                    print [os.path.normpath('/'.join([dir_abs,f])) for f in fileslist[file_id:file_id+dir_type]]
-
+                    self.structure[1][dir_f].append([os.path.normpath('/'.join([dir_abs,f])) for f in fileslist[file_id:file_id+dir_type]])
+                    file_id += dir_type
+        print self.structure
 
     def _check_fileslist(self, fileslist, languageslist, dir_type):
         ''' get the list of files which match the languagelist
@@ -124,7 +126,7 @@ class Decode_Corpora():
                 return False
         return True
 
-    def _check_file(self, file_f, lang_f, dir_type):
+    def _check_file(self, file_f, lang_f):
         ''' check if the file fit the description
         '''
         if (file_f.endswith("."+lang_f)):
@@ -138,11 +140,25 @@ class Decode_Corpora():
         """
         return True
 
-    def _monolingual_find(self):
+    def _monolingual_find(self, target=None):
         """ find all the monolingual corpora for the language model
             return a list of files
             maybe another list of parallel corpora which could be used as monolingual corpora
         """
+        mono, multi = [],[]
+        for lang,dir_f in self.structure[1].iteritems():
+            for fileslist in dir_f[1:]:
+                for file_f in fileslist:
+                    if (self._check_file(file_f,target)):
+                        if (len(dir_f[0]) == 1):
+                            mono.append(file_f)
+                        else:
+                            multi.append(file_f)
+
+        print "Mono", mono
+        print "multi", multi
+
+
         return None
 
     def _bilingual_find(self):
@@ -232,4 +248,4 @@ if __name__ == "__main__":
                                target=args.target,
                                corporadir=args.corporadir,
                                output_file=args.output_file)
-
+        dc._monolingual_find("en")
