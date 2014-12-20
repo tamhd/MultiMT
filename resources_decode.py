@@ -70,13 +70,10 @@ class Decode_Corpora():
         ''' browse the directory and load a hash table out of those dir
         '''
 #TODO: There might be a nicer way to concatenate directory
-        print "Browsing directory"
         self.structure = defaultdict()
         self.structure[0] = os.path.normpath('/'.join([os.getcwd(), self.cordir]))
-        print self.structure[0]
         # load all directories inside
         onlydirs = [d for d in os.listdir(self.structure[0]) if os.path.isdir('/'.join([self.structure[0], d]))]
-        print onlydirs
         self.structure[1] = defaultdict(lambda: [])
         # loop through 1st layer directory
         for dir_f in onlydirs:
@@ -92,12 +89,10 @@ class Decode_Corpora():
                 dir_f2 = dir_f[i:(i+2)]
                 if (dir_f2 not in self.langslist):
                     self.langslist.append(dir_f2)
-                print dir_f2
                 languages.append(dir_f2)
                 i+=2
             dir_abs = os.path.normpath('/'.join([self.structure[0], dir_f]))
             onlyfiles = [f for f in os.listdir(dir_abs) if (os.path.isfile('/'.join([dir_abs, f])) and f[:1].isalpha())]
-            print onlyfiles
             # loop through the 2nd layer of directory
             # not used anymore
             if (dir_type == 1):
@@ -111,13 +106,9 @@ class Decode_Corpora():
                 print "WRONG SIZE", len(onlyfiles), dir_type+1
             fileslist = sorted(onlyfiles)
             for file_id in range(len(onlyfiles)-dir_type+1):
-                print len(fileslist[file_id:file_id+dir_type])
                 if (self._check_fileslist(fileslist[file_id:file_id+dir_type], languages, dir_type)):
-                    print "match: ", file_id
                     self.structure[1][dir_f].append([os.path.normpath('/'.join([dir_abs,f])) for f in fileslist[file_id:file_id+dir_type]])
                     file_id += dir_type
-        print self.structure
-        print self.langslist
 
     def _check_fileslist(self, fileslist, languageslist, dir_type):
         ''' get the list of files which match the languagelist
@@ -182,10 +173,9 @@ class Decode_Corpora():
                         else:
                             multi.append(file_f)
 
-        print "Mono", mono
-        print "multi", multi
-
-        return None
+        #print "Mono", mono
+        #print "multi", multi
+        return [mono,multi]
 
     def _bilingual_find(self, source, target):
         """ find all the bilingual corpora for the language model
@@ -213,30 +203,22 @@ class Decode_Corpora():
             TODO: Think about the reverse pivot-* config
         """
         trilist = defaultdict(lambda: [])
-        sourceside = defaultdict()
-        targetside = defaultdict()
+        #sourceside = defaultdict()
+        #targetside = defaultdict()
         for pivot in self.langslist:
-            print "-------------------------- ", pivot
             if (pivot == source or pivot == target):
                 continue
 
             srcside = self._bilingual_find(pivot,source)
-            print srcside
-            if (srcside):
-                print "pivot source ", pivot, srcside
-                sourceside[pivot] = srcside
+            #if (srcside):
+            #    sourceside[pivot] = srcside
             tgtside = self._bilingual_find(pivot,target)
-            if (tgtside):
-                print "pivot target ", pivot, tgtside
-                targetside[pivot] = tgtside
+            #if (tgtside):
+            #    targetside[pivot] = tgtside
             if (srcside and tgtside):
                 trilist[pivot].append([srcside,tgtside])
 
-        print sourceside, targetside
-
-        print trilist
-
-        return None
+        return trilist
 
 
 
@@ -309,8 +291,6 @@ if __name__ == "__main__":
                                target=args.target,
                                corporadir=args.corporadir,
                                output_file=args.output_file)
-        #dc._monolingual_find("en")
-        #print "bilingual"
-        #print dc._bilingual_find("uk","cs")
-        print "Triangulation: "
-        dc._triangulation_find("uk","en")
+        print dc._monolingual_find("en")
+        print dc._bilingual_find("uk","cs")
+        print dc._triangulation_find("uk","en")
