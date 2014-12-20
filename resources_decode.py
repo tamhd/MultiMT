@@ -56,7 +56,7 @@ class Decode_Corpora():
         self.target = target
         self.cordir = corporadir
         self.output_file = output_file
-
+        self.langslist = []
         self._load_config()
         self._browse_dir()
 
@@ -86,9 +86,12 @@ class Decode_Corpora():
             dir_type = int(len(dir_f)/2)
             i = 0
             languages = []
+            self.structure[1][dir_f].append(True)
             self.structure[1][dir_f].append(languages)
             while(i+2 <= len(dir_f)):
                 dir_f2 = dir_f[i:(i+2)]
+                if (dir_f2 not in self.langslist):
+                    self.langslist.append(dir_f2)
                 print dir_f2
                 languages.append(dir_f2)
                 i+=2
@@ -114,6 +117,7 @@ class Decode_Corpora():
                     self.structure[1][dir_f].append([os.path.normpath('/'.join([dir_abs,f])) for f in fileslist[file_id:file_id+dir_type]])
                     file_id += dir_type
         print self.structure
+        print self.langslist
 
     def _check_fileslist(self, fileslist, languageslist, dir_type):
         ''' get the list of files which match the languagelist
@@ -140,17 +144,40 @@ class Decode_Corpora():
         """
         return True
 
+    def _check_pair(self, src, tgt, fileslist):
+        ''' check if the pair is in the fileslist
+        '''
+        count=0
+        pair = []
+        for file_f in fileslist:
+            if self._check_file(file_f,src):
+                count+=1
+                pair.append(file_f)
+                break
+        for file_f in fileslist:
+            if self._check_file(file_f,tgt):
+                count+=1
+                pair.append(file_f)
+                break
+        if (count == 2):
+            return pair
+        return None
+
+
     def _monolingual_find(self, target=None):
         """ find all the monolingual corpora for the language model
             return a list of files
             maybe another list of parallel corpora which could be used as monolingual corpora
+            False - cs+en - file - file
         """
         mono, multi = [],[]
         for lang,dir_f in self.structure[1].iteritems():
-            for fileslist in dir_f[1:]:
+            if (not dir_f[0]):
+                continue
+            for fileslist in dir_f[2:]:
                 for file_f in fileslist:
                     if (self._check_file(file_f,target)):
-                        if (len(dir_f[0]) == 1):
+                        if (len(dir_f[1]) == 1):
                             mono.append(file_f)
                         else:
                             multi.append(file_f)
@@ -158,23 +185,57 @@ class Decode_Corpora():
         print "Mono", mono
         print "multi", multi
 
-
         return None
 
-    def _bilingual_find(self):
+    def _bilingual_find(self, source, target):
         """ find all the bilingual corpora for the language model
             return a list of paired files
             (cs1,uk1), (cs2,uk2)
         """
-        return None
+        bilist = []
+        for lang,dir_f in self.structure[1].iteritems():
+            if (not dir_f[0]):
+                continue
+            if (len(dir_f[1]) > 1):
+                for fileslist in dir_f[2:]:
+                    pair = self._check_pair(source, target, fileslist)
+                    if (pair):
+                        bilist.append(pair)
+                        self.structure[1][lang][0] = False
+        #print bilist
+        return bilist
 
-    def _triangulation_find(self):
+    def _triangulation_find(self, source, target):
         """ find all the bilingual corpora for the language model
             return a dictionary
             dict -> {cs-en-uk}->[0] = [[cs1,en1],[cs2,en2]]
                               ->[1] = [[en,uk],[en1,uk1]]
             TODO: Think about the reverse pivot-* config
         """
+        trilist = defaultdict(lambda: [])
+        sourceside = defaultdict()
+        targetside = defaultdict()
+        for pivot in self.langslist:
+            print "-------------------------- ", pivot
+            if (pivot == source or pivot == target):
+                continue
+
+            srcside = self._bilingual_find(pivot,source)
+            print srcside
+            if (srcside):
+                print "pivot source ", pivot, srcside
+                sourceside[pivot] = srcside
+            tgtside = self._bilingual_find(pivot,target)
+            if (tgtside):
+                print "pivot target ", pivot, tgtside
+                targetside[pivot] = tgtside
+            if (srcside and tgtside):
+                trilist[pivot].append([srcside,tgtside])
+
+        print sourceside, targetside
+
+        print trilist
+
         return None
 
 
@@ -248,4 +309,8 @@ if __name__ == "__main__":
                                target=args.target,
                                corporadir=args.corporadir,
                                output_file=args.output_file)
-        dc._monolingual_find("en")
+        #dc._monolingual_find("en")
+        #print "bilingual"
+        #print dc._bilingual_find("uk","cs")
+        print "Triangulation: "
+        dc._triangulation_find("uk","en")
