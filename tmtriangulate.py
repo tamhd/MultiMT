@@ -3,7 +3,7 @@
 # ./tmtriangulate.py combine_given_weights -ps test/model1 -pt test/model2 -o test/phrase-table_sample -t tempdir
 #  This class implement a naive method for triangulation: nothing
 #  The most important part of this method is to initialize variables
-
+#TODO: Implement a method for inversed : src-pvt ---> pvt-src phrase table
 from __future__ import division, unicode_literals
 import sys
 import os
@@ -340,19 +340,16 @@ class Triangulate_TMs():
         self.flags['i_f2e'] = int(self.flags['i_f2e'])
         self.flags['i_f2e_lex'] = int(self.flags['i_f2e_lex'])
 
-        # HEY THIS IS THE LIST, BUT IT IS ALWAYS interpolate
+        # Variable 'mode' is preserved to prepare for multiple way of trianuglating.
+        # At this moment, it is  interpolate
         if mode not in ['interpolate']:
             sys.stderr.write('Error: mode must be either "interpolate", "loglinear" or "counts"\n')
             sys.exit(1)
 
         #models,number_of_features = self._sanity_checks(models,number_of_features)
         number_of_features = int(number_of_features)
-        #self.models = models
         self.model1=model1
         self.model2=model2
-        #self.model_interface = model_interface(models,number_of_features)
-        #self.model1_interface = model_interface(model1,number_of_features)
-        #self.model2_interface = model_interface(model2,number_of_features)
 
         #self.score = score_interpolate
 
@@ -434,11 +431,7 @@ class Triangulate_TMs():
 
             self.loaded['pt-target'] = 1
 
-
-
-
-############################################################################################################
-    # THE START OF MY CODE
+    ############################################################################################################
     def combine_standard(self,weights=None):
         """write a new phrase table, based on existing weights of two other tables"""
         data = []
@@ -454,8 +447,6 @@ class Triangulate_TMs():
         if self.flags['lowmem'] and (self.mode == 'counts' or self.flags['normalized'] and self.flags['normalize_s_given_t'] == 't'):
             self._inverse_wrapper(weights,tempdir=self.flags['tempdir'])
         else:
-            # the stream goes here
-            # models = [(self.model_interface.open_table(model,'phrase-table'),priority,i) for (model,priority,i) in priority_sort_models(self.model_interface.models)]
             file1obj = handle_file(os.path.join(self.model1,'model','phrase-table'), 'open', 'r')
             file2obj = handle_file(os.path.join(self.model2,'model','phrase-table'), 'open', 'r')
             model1 = (file1obj, 1, 1)
@@ -467,11 +458,11 @@ class Triangulate_TMs():
             handle_file(self.output_file,'close',output_object,mode='w')
 
     def _load_line(self,line):
+        # nothing found, nothing return
         if (not line):
             return None
         ''' This function convert a string into an array of string and probability
         '''
-        #print "line : ", line
         line = line.rstrip().split(b'|||')
         if line[-1].endswith(b' |||'):
             line[-1] = line[-1][:-4]
@@ -503,9 +494,6 @@ class Triangulate_TMs():
                     line2 = self._load_line(model2[0].readline())
                     continue
                 else:
-                    # out of the matching reason
-                    # process the maching part
-                    #print line1, line2
                     self._combine_and_print(output_object)
 
             # handle if the matching is found
@@ -540,13 +528,13 @@ class Triangulate_TMs():
             for phrase2 in self.phrase_equal[2]:
                 if (phrase1[0] != phrase2[0]):
                     sys.exit("THE PIVOTS ARE DIFFERENT")
-                #print "Matching : ", phrase1, phrase2
                 src = phrase1[1].strip()
                 tgt = phrase2[1].strip()
                 if (not isinstance(phrase1[2],list)):
                     phrase1[2] = [float(i) for i in phrase1[2].strip().split()]
                 if (not isinstance(phrase2[2],list)):
                     phrase2[2] = [float(j) for j in phrase2[2].strip().split()]
+
                 #self.phrase_probabilities=[0]*4
                 # A-B = A|B|P(A|B) L(A|B) P(B|A) L(B|A)
                 # A-C = A|C|P(A|C) L(A|C) P(C|A) L(C|A)
@@ -573,10 +561,6 @@ class Triangulate_TMs():
         phrase_features[1] = feature1[3] * feature2[1]
         phrase_features[2] = feature1[0] * feature2[2]
         phrase_features[3] = feature1[1] * feature2[3]
-        #self.phrase_probabilities[src][tgt][0] = phrase1[2][2] * phrase2[2][0]
-        #self.phrase_probabilities[src][tgt][1] = phrase1[2][3] * phrase2[2][1]
-        #self.phrase_probabilities[src][tgt][2] = phrase1[2][0] * phrase2[2][2]
-        #self.phrase_probabilities[src][tgt][3] = phrase1[2][1] * phrase2[2][3]
 
         return phrase_features
 
@@ -762,9 +746,7 @@ if __name__ == "__main__":
         # write everything to a file
         combiner.combine_standard()
         # sort the file
-        #newfile = sort_file(combiner.output_file,tempdir="/net/cluster/TMP/thoang/")
         tmpfile = sort_file(combiner.output_file,tempdir=args.tempdir2)
-        #print "sorted file", newfile
         #os.remove(combiner.output_file)
         # combine the new file
         merger = Merge_TM(model=tmpfile,
