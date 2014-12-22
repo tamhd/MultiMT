@@ -15,7 +15,7 @@ from math import log, exp
 from collections import defaultdict
 from operator import mul
 from tempfile import NamedTemporaryFile
-from tmcombine import Moses, Moses_Alignment, to_list
+#from tmcombine import Moses, Moses_Alignment, to_list
 from subprocess import Popen
 
 
@@ -110,6 +110,16 @@ def parse_command_line():
 
     return parser.parse_args()
 
+#convert weight vector passed as a command line argument
+class to_list(argparse.Action):
+     def __call__(self, parser, namespace, weights, option_string=None):
+         if ';' in weights:
+             values = [[float(x) for x in vector.split(',')] for vector in weights.split(';')]
+         else:
+             values = [float(x) for x in weights.split(',')]
+         setattr(namespace, self.dest, values)
+
+#merge the noisy phrase table
 class Merge_TM():
     """This class take input as one noisy phrase table in which it consists of so many repeated lines.
        The output of this class should be one final clean phrase table
@@ -122,8 +132,6 @@ class Merge_TM():
     def __init__(self,model=None,
                       output_file=None,
                       mode='interpolate',
-                      reference_interface=Moses_Alignment,
-                      reference_file=None,
                       lang_src=None,
                       lang_target=None,
                       output_lexical=None,
@@ -313,9 +321,6 @@ class Triangulate_TMs():
                       output_file=None,
                       mode='interpolate',
                       number_of_features=4,
-                      model_interface=Moses,
-                      reference_interface=Moses_Alignment,
-                      reference_file=None,
                       lang_src=None,
                       lang_target=None,
                       output_lexical=None,
@@ -334,8 +339,6 @@ class Triangulate_TMs():
         self.flags['i_e2f_lex'] = int(self.flags['i_e2f_lex'])
         self.flags['i_f2e'] = int(self.flags['i_f2e'])
         self.flags['i_f2e_lex'] = int(self.flags['i_f2e_lex'])
-        if reference_interface:
-            self.reference_interface = reference_interface(reference_file)
 
         # HEY THIS IS THE LIST, BUT IT IS ALWAYS interpolate
         if mode not in ['interpolate']:
@@ -348,22 +351,23 @@ class Triangulate_TMs():
         self.model1=model1
         self.model2=model2
         #self.model_interface = model_interface(models,number_of_features)
-        self.model1_interface = model_interface(model1,number_of_features)
-        self.model2_interface = model_interface(model2,number_of_features)
+        #self.model1_interface = model_interface(model1,number_of_features)
+        #self.model2_interface = model_interface(model2,number_of_features)
 
         #self.score = score_interpolate
 
-    # A function I borrow from TM_Combine
     def _sanity_checks(self,models,number_of_features):
         """check if input arguments make sense
            this function is important in TMCombine
            TODO: Think how to use this function in triangulation, which feature is necessary to check
         """
+        #Note: This is a function which I borrow from TMCombine, however, it has not been used at all :)
         return None
 
-    # ANOTHER FUCTION I BORROW FROM TM_Combine
+
     def _ensure_loaded(self,data):
         """load data (lexical tables; reference alignment; phrase table), if it isn't already in memory"""
+        #Note:  This is a function which I borrow from TMCombine, however, it has not been used at all :)
 
         if 'lexical' in data:
             self.model_interface.require_alignment = True
@@ -445,16 +449,19 @@ class Triangulate_TMs():
             if self.flags['normalized'] and self.flags['normalize_s_given_t'] == 't' and not self.flags['lowmem']:
                 data.append('pt-target')
 
-        self._ensure_loaded(data)
+        #self._ensure_loaded(data)
 
         if self.flags['lowmem'] and (self.mode == 'counts' or self.flags['normalized'] and self.flags['normalize_s_given_t'] == 't'):
             self._inverse_wrapper(weights,tempdir=self.flags['tempdir'])
         else:
             # the stream goes here
             # models = [(self.model_interface.open_table(model,'phrase-table'),priority,i) for (model,priority,i) in priority_sort_models(self.model_interface.models)]
-            model1 = (self.model1_interface.open_table(self.model1, 'phrase-table'), 1, 1)
-            model2 = (self.model2_interface.open_table(self.model2, 'phrase-table'), 1, 2)
-            print model1, model2, self.mode
+            file1obj = handle_file(os.path.join(self.model1,'model','phrase-table'), 'open', 'r')
+            file2obj = handle_file(os.path.join(self.model2,'model','phrase-table'), 'open', 'r')
+            model1 = (file1obj, 1, 1)
+            model2 = (file2obj, 1, 2)
+
+            #print model1, model2, self.mode
             output_object = handle_file(self.output_file,'open',mode='w')
             self._write_phrasetable(model1, model2, output_object)
             handle_file(self.output_file,'close',output_object,mode='w')
@@ -634,8 +641,9 @@ class Triangulate_TMs():
 
 
     def _write_phrasetable_file(self,src,tgt,features,alignment,word_counts):
+        ''' Output the line in Moses format
+        '''
         # convert data to appropriate format
-        # probability
         features = b' '.join([b'%.6g' %(f) for f in features])
 
         alignments = []
