@@ -527,8 +527,8 @@ class Triangulate_TMs():
         in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
         After combining two phrase-table, print them right after it
         '''
-        if (len(self.phrase_equal[1]) > 10 and len(self.phrase_equal[2]) > 10):
-            print "Huge match: ", self.phrase_equal[1][0][0], len(self.phrase_equal[1]), len(self.phrase_equal[2])
+        #if (len(self.phrase_equal[1]) > 10 and len(self.phrase_equal[2]) > 10):
+            #print "Huge match: ", self.phrase_equal[1][0][0], len(self.phrase_equal[1]), len(self.phrase_equal[2])
         for phrase1 in self.phrase_equal[1]:
             for phrase2 in self.phrase_equal[2]:
                 if (phrase1[0] != phrase2[0]):
@@ -737,7 +737,7 @@ if __name__ == "__main__":
                                model1=args.srcpvt,
                                model2=args.pvttgt,
                                mode=args.mode,
-                               output_file=args.output,
+                               output_file=os.path.normpath('/'.join([args.tempdir2, 'phrase-table'])),
                                reference_file=args.reference,
                                output_lexical=args.output_lexical,
                                lowmem=args.lowmem,
@@ -757,9 +757,9 @@ if __name__ == "__main__":
         #newfile = sort_file(combiner.output_file,tempdir="/net/cluster/TMP/thoang/")
         tmpfile = sort_file(combiner.output_file,tempdir=args.tempdir2)
         #print "sorted file", newfile
-        os.remove(combiner.output_file)
+        #os.remove(combiner.output_file)
         # combine the new file
         merger = Merge_TM(model=tmpfile,
-                          output_file=combiner.output_file,
+                          output_file=args.output,
                           mode=combiner.mode)
         merger._combine_TM()
