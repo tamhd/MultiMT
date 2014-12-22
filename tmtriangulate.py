@@ -3,7 +3,7 @@
 # ./tmtriangulate.py combine_given_weights -ps test/model1 -pt test/model2 -o test/phrase-table_sample -t tempdir
 #  This class implement a naive method for triangulation: nothing
 #  The most important part of this method is to initialize variables
-
+#TODO: Implement a method for inversed : src-pvt ---> pvt-src phrase table
 from __future__ import division, unicode_literals
 import sys
 import os
@@ -15,7 +15,7 @@ from math import log, exp
 from collections import defaultdict
 from operator import mul
 from tempfile import NamedTemporaryFile
-from tmcombine import Moses, Moses_Alignment, to_list
+#from tmcombine import Moses, Moses_Alignment, to_list
 from subprocess import Popen
 
 
@@ -110,6 +110,16 @@ def parse_command_line():
 
     return parser.parse_args()
 
+#convert weight vector passed as a command line argument
+class to_list(argparse.Action):
+     def __call__(self, parser, namespace, weights, option_string=None):
+         if ';' in weights:
+             values = [[float(x) for x in vector.split(',')] for vector in weights.split(';')]
+         else:
+             values = [float(x) for x in weights.split(',')]
+         setattr(namespace, self.dest, values)
+
+#merge the noisy phrase table
 class Merge_TM():
     """This class take input as one noisy phrase table in which it consists of so many repeated lines.
        The output of this class should be one final clean phrase table
@@ -122,8 +132,6 @@ class Merge_TM():
     def __init__(self,model=None,
                       output_file=None,
                       mode='interpolate',
-                      reference_interface=Moses_Alignment,
-                      reference_file=None,
                       lang_src=None,
                       lang_target=None,
                       output_lexical=None,
@@ -313,9 +321,6 @@ class Triangulate_TMs():
                       output_file=None,
                       mode='interpolate',
                       number_of_features=4,
-                      model_interface=Moses,
-                      reference_interface=Moses_Alignment,
-                      reference_file=None,
                       lang_src=None,
                       lang_target=None,
                       output_lexical=None,
@@ -334,36 +339,32 @@ class Triangulate_TMs():
         self.flags['i_e2f_lex'] = int(self.flags['i_e2f_lex'])
         self.flags['i_f2e'] = int(self.flags['i_f2e'])
         self.flags['i_f2e_lex'] = int(self.flags['i_f2e_lex'])
-        if reference_interface:
-            self.reference_interface = reference_interface(reference_file)
 
-        # HEY THIS IS THE LIST, BUT IT IS ALWAYS interpolate
+        # Variable 'mode' is preserved to prepare for multiple way of trianuglating.
+        # At this moment, it is  interpolate
         if mode not in ['interpolate']:
             sys.stderr.write('Error: mode must be either "interpolate", "loglinear" or "counts"\n')
             sys.exit(1)
 
         #models,number_of_features = self._sanity_checks(models,number_of_features)
         number_of_features = int(number_of_features)
-        #self.models = models
         self.model1=model1
         self.model2=model2
-        #self.model_interface = model_interface(models,number_of_features)
-        self.model1_interface = model_interface(model1,number_of_features)
-        self.model2_interface = model_interface(model2,number_of_features)
 
         #self.score = score_interpolate
 
-    # A function I borrow from TM_Combine
     def _sanity_checks(self,models,number_of_features):
         """check if input arguments make sense
            this function is important in TMCombine
            TODO: Think how to use this function in triangulation, which feature is necessary to check
         """
+        #Note: This is a function which I borrow from TMCombine, however, it has not been used at all :)
         return None
 
-    # ANOTHER FUCTION I BORROW FROM TM_Combine
+
     def _ensure_loaded(self,data):
         """load data (lexical tables; reference alignment; phrase table), if it isn't already in memory"""
+        #Note:  This is a function which I borrow from TMCombine, however, it has not been used at all :)
 
         if 'lexical' in data:
             self.model_interface.require_alignment = True
@@ -430,11 +431,7 @@ class Triangulate_TMs():
 
             self.loaded['pt-target'] = 1
 
-
-
-
-############################################################################################################
-    # THE START OF MY CODE
+    ############################################################################################################
     def combine_standard(self,weights=None):
         """write a new phrase table, based on existing weights of two other tables"""
         data = []
@@ -445,26 +442,27 @@ class Triangulate_TMs():
             if self.flags['normalized'] and self.flags['normalize_s_given_t'] == 't' and not self.flags['lowmem']:
                 data.append('pt-target')
 
-        self._ensure_loaded(data)
+        #self._ensure_loaded(data)
 
         if self.flags['lowmem'] and (self.mode == 'counts' or self.flags['normalized'] and self.flags['normalize_s_given_t'] == 't'):
             self._inverse_wrapper(weights,tempdir=self.flags['tempdir'])
         else:
-            # the stream goes here
-            # models = [(self.model_interface.open_table(model,'phrase-table'),priority,i) for (model,priority,i) in priority_sort_models(self.model_interface.models)]
-            model1 = (self.model1_interface.open_table(self.model1, 'phrase-table'), 1, 1)
-            model2 = (self.model2_interface.open_table(self.model2, 'phrase-table'), 1, 2)
-            print model1, model2, self.mode
+            file1obj = handle_file(os.path.join(self.model1,'model','phrase-table'), 'open', 'r')
+            file2obj = handle_file(os.path.join(self.model2,'model','phrase-table'), 'open', 'r')
+            model1 = (file1obj, 1, 1)
+            model2 = (file2obj, 1, 2)
+
+            #print model1, model2, self.mode
             output_object = handle_file(self.output_file,'open',mode='w')
             self._write_phrasetable(model1, model2, output_object)
             handle_file(self.output_file,'close',output_object,mode='w')
 
     def _load_line(self,line):
+        # nothing found, nothing return
         if (not line):
             return None
         ''' This function convert a string into an array of string and probability
         '''
-        #print "line : ", line
         line = line.rstrip().split(b'|||')
         if line[-1].endswith(b' |||'):
             line[-1] = line[-1][:-4]
@@ -496,9 +494,6 @@ class Triangulate_TMs():
                     line2 = self._load_line(model2[0].readline())
                     continue
                 else:
-                    # out of the matching reason
-                    # process the maching part
-                    #print line1, line2
                     self._combine_and_print(output_object)
 
             # handle if the matching is found
@@ -527,19 +522,19 @@ class Triangulate_TMs():
         in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
         After combining two phrase-table, print them right after it
         '''
-        if (len(self.phrase_equal[1]) > 10 and len(self.phrase_equal[2]) > 10):
-            print "Huge match: ", self.phrase_equal[1][0][0], len(self.phrase_equal[1]), len(self.phrase_equal[2])
+        #if (len(self.phrase_equal[1]) > 10 and len(self.phrase_equal[2]) > 10):
+            #print "Huge match: ", self.phrase_equal[1][0][0], len(self.phrase_equal[1]), len(self.phrase_equal[2])
         for phrase1 in self.phrase_equal[1]:
             for phrase2 in self.phrase_equal[2]:
                 if (phrase1[0] != phrase2[0]):
                     sys.exit("THE PIVOTS ARE DIFFERENT")
-                #print "Matching : ", phrase1, phrase2
                 src = phrase1[1].strip()
                 tgt = phrase2[1].strip()
                 if (not isinstance(phrase1[2],list)):
                     phrase1[2] = [float(i) for i in phrase1[2].strip().split()]
                 if (not isinstance(phrase2[2],list)):
                     phrase2[2] = [float(j) for j in phrase2[2].strip().split()]
+
                 #self.phrase_probabilities=[0]*4
                 # A-B = A|B|P(A|B) L(A|B) P(B|A) L(B|A)
                 # A-C = A|C|P(A|C) L(A|C) P(C|A) L(C|A)
@@ -566,10 +561,6 @@ class Triangulate_TMs():
         phrase_features[1] = feature1[3] * feature2[1]
         phrase_features[2] = feature1[0] * feature2[2]
         phrase_features[3] = feature1[1] * feature2[3]
-        #self.phrase_probabilities[src][tgt][0] = phrase1[2][2] * phrase2[2][0]
-        #self.phrase_probabilities[src][tgt][1] = phrase1[2][3] * phrase2[2][1]
-        #self.phrase_probabilities[src][tgt][2] = phrase1[2][0] * phrase2[2][2]
-        #self.phrase_probabilities[src][tgt][3] = phrase1[2][1] * phrase2[2][3]
 
         return phrase_features
 
@@ -634,8 +625,9 @@ class Triangulate_TMs():
 
 
     def _write_phrasetable_file(self,src,tgt,features,alignment,word_counts):
+        ''' Output the line in Moses format
+        '''
         # convert data to appropriate format
-        # probability
         features = b' '.join([b'%.6g' %(f) for f in features])
 
         alignments = []
@@ -737,7 +729,7 @@ if __name__ == "__main__":
                                model1=args.srcpvt,
                                model2=args.pvttgt,
                                mode=args.mode,
-                               output_file=args.output,
+                               output_file=os.path.normpath('/'.join([args.tempdir2, 'phrase-table'])),
                                reference_file=args.reference,
                                output_lexical=args.output_lexical,
                                lowmem=args.lowmem,
@@ -754,12 +746,10 @@ if __name__ == "__main__":
         # write everything to a file
         combiner.combine_standard()
         # sort the file
-        #newfile = sort_file(combiner.output_file,tempdir="/net/cluster/TMP/thoang/")
         tmpfile = sort_file(combiner.output_file,tempdir=args.tempdir2)
-        #print "sorted file", newfile
-        os.remove(combiner.output_file)
+        #os.remove(combiner.output_file)
         # combine the new file
         merger = Merge_TM(model=tmpfile,
-                          output_file=combiner.output_file,
+                          output_file=args.output,
                           mode=combiner.mode)
         merger._combine_TM()
