@@ -4,6 +4,7 @@
 #  This class implement a naive method for triangulation: nothing
 #  The most important part of this method is to initialize variables
 #TODO: Implement a method for inversed : src-pvt ---> pvt-src phrase table
+#TODO: Implement a mode for combine: get the maximum or the sum
 from __future__ import division, unicode_literals
 import sys
 import os
