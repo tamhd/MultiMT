@@ -164,8 +164,10 @@ class Merge_TM():
             self.combine_lines = self._combine_sum
         elif (self.action == 'maximize_given_weights'):
             self.combine_lines = self._combine_max
+        else:
+            # by default, let say we take the sum
+            self.combine_lines = self._combine_sum
 
-        print "xxxxxxxxxxxxxxx ", self.combine_lines
 
         for line in self.model:
             # print counting lines
@@ -691,6 +693,7 @@ def handle_file(filename,action,fileobj=None,mode='r'):
 
     elif action == 'close' and filename != '-':
         fileobj.close()
+
 
 def sort_file(filename,tempdir=None):
     """Sort a file and return temporary file"""
