@@ -34,7 +34,7 @@ def parse_command_line():
     group2 = parser.add_argument_group('More model combination options')
     group3 = parser.add_argument_group('Naive triangulation')
 
-    group1.add_argument('action', metavar='ACTION', choices=["combine_given_weights","combine_given_tuning_set","combine_reordering_tables","compute_cross_entropy","return_best_cross_entropy","compare_cross_entropies"],
+    group1.add_argument('action', metavar='ACTION', choices=["combine_given_weights","maximize_given_weights"],
                     help='What you want to do with the models. One of %(choices)s.')
 
     group1.add_argument('-ps', metavar='DIRECTORY', dest='srcpvt',
@@ -136,6 +136,7 @@ class Merge_TM():
                       lang_src=None,
                       lang_target=None,
                       output_lexical=None,
+                      action="combine_given_weights"
                       ):
 
         self.mode = mode
@@ -145,6 +146,7 @@ class Merge_TM():
         self.lang_target = lang_target
         self.loaded = defaultdict(int)
         self.output_lexical = output_lexical
+        self.action=action
 
     def _combine_TM(self,flag=False,prev_line=None):
         '''
@@ -157,6 +159,14 @@ class Merge_TM():
         count = 0
         sys.stderr.write("Start merging multiple lines ...")
 
+        # define the action
+        if (self.action == 'combine_given_weights'):
+            self.combine_lines = self._combine_sum
+        elif (self.action == 'maximize_given_weights'):
+            self.combine_lines = self._combine_max
+
+        print "xxxxxxxxxxxxxxx ", self.combine_lines
+
         for line in self.model:
             # print counting lines
             if not count%100000:
@@ -167,7 +177,7 @@ class Merge_TM():
             if (flag):
                 if (line[0] == prev_line[0] and line[1] == prev_line[1]):
                     # combine current sentence to previous sentence, return previous sentence
-                    prev_line_tmp = self._combine_sum(prev_line, line)
+                    prev_line_tmp = self._combine_lines(prev_line, line)
                     continue
                 else:
                 # when you get out of the identical blog, print your previous sentence
@@ -210,7 +220,7 @@ class Merge_TM():
             prev_line[4][2] += cur_line[4][2]
         return prev_line
 
-    def _combine_maximum(self,prev_line=None,cur_line=None):
+    def _combine_max(self,prev_line=None,cur_line=None):
         '''
         Get the maximum the probability
         Get the unification of alignment
@@ -752,5 +762,6 @@ if __name__ == "__main__":
         # combine the new file
         merger = Merge_TM(model=tmpfile,
                           output_file=args.output,
-                          mode=combiner.mode)
+                          mode=combiner.mode,
+                          action=args.action)
         merger._combine_TM()
