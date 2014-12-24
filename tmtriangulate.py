@@ -5,6 +5,7 @@
 #  The most important part of this method is to initialize variables
 #TODO: Implement a method for inversed : src-pvt ---> pvt-src phrase table
 #TODO: Implement a mode for combine: get the maximum or the sum
+#TODO: Implement penalty (the fifth value in probabilities)
 from __future__ import division, unicode_literals
 import sys
 import os
@@ -51,6 +52,10 @@ def parse_command_line():
                     default="interpolate",
                     choices=["counts","interpolate","loglinear"],
                     help='basic mixture-model algorithm. Default: %(default)s. Note: depending on mode and additional configuration, additional statistics are needed. Check docstring documentation of Triangulate_TMs() for more info.')
+
+    group1.add_argument('-i', '--inverted', type=str,
+                    choices=["src-pvt","tgt-pvt",'both'],
+                    help='choose to invert the phrasetable if you don\'t have two phrase table in the form of pvt-src and pvt-tgt. You may choose to invert one of them or both of them')
 
     group1.add_argument('-r', '--reference', type=str,
                     default=None,
@@ -333,6 +338,8 @@ class Triangulate_TMs():
                       weights=None,
                       output_file=None,
                       mode='interpolate',
+                      inverted=None,
+                      tempdir=None,
                       number_of_features=4,
                       lang_src=None,
                       lang_target=None,
@@ -347,7 +354,8 @@ class Triangulate_TMs():
         self.output_lexical = output_lexical
         self.flags = copy.copy(self.flags)
         self.flags.update(flags)
-
+        self.inverted = inverted
+        self.tempdir=tempdir
         self.flags['i_e2f'] = int(self.flags['i_e2f'])
         self.flags['i_e2f_lex'] = int(self.flags['i_e2f_lex'])
         self.flags['i_f2e'] = int(self.flags['i_f2e'])
@@ -373,6 +381,7 @@ class Triangulate_TMs():
         """
         #Note: This is a function which I borrow from TMCombine, however, it has not been used at all :)
         return None
+
 
 
     def _ensure_loaded(self,data):
@@ -464,11 +473,80 @@ class Triangulate_TMs():
             file2obj = handle_file(os.path.join(self.model2,'model','phrase-table'), 'open', 'r')
             model1 = (file1obj, 1, 1)
             model2 = (file2obj, 1, 2)
-
+            self._ensure_inverted(model1, model2)
             #print model1, model2, self.mode
             output_object = handle_file(self.output_file,'open',mode='w')
             self._write_phrasetable(model1, model2, output_object)
             handle_file(self.output_file,'close',output_object,mode='w')
+
+    def _ensure_inverted(self, model1, model2):
+        ''' make sure that all the data is in the right format
+        '''
+        # do nothing for inverted
+        if (not self.inverted):
+            return None
+
+        models=[]
+        if (self.inverted == 'src-pvt'):
+            models.append(model1)
+        elif (self.inverted == 'tgt-pvt'):
+            models.append(model2)
+        elif (self.inverted == 'both'):
+            models.append(model1)
+            models.append(model2)
+        else:
+            return None
+
+        for mod in models:
+            outfile = NamedTemporaryFile(delete=False,dir=self.tempdir)
+            output_contr = handle_file(outfile.name, 'open', mode='w')
+            print "Inverse model ", mod[0], " > ", outfile.name
+        #TODO: Read line, revert the data to pvt ||| X ||| prob ||| align ||| count ||| |||
+            for line in mod[0]:
+                line = self._load_line(line)
+                # reversing
+                pvt_word = line[1].strip()
+                line[1] = line[0].strip()
+                line[0] = pvt_word
+                # reverse probability
+                features = [float(f) for f in line[2].strip().split(b' ')]
+                tmp = features[0]
+                features[0] = features[2]
+                features[2] = tmp
+                tmp = features[1]
+                features[1] = features[3]
+                features[3] = tmp
+
+                # reverse alignment
+                phrase_align = defaultdict(lambda: []*3)
+                for pair in line[3].strip().split(b' '):
+                    try:
+                        t,s = pair.split(b'-')
+                        t,s = int(t),int(s)
+                        phrase_align[s].append(t)
+                    except:
+                        #print "Infeasible pair ", pair
+                        pass
+                # break the count
+                # sometimes, the count is too big
+                line[4] = [long(float(i)) for i in line[4].strip().split(b' ')]
+                if (len(line[4]) > 1):
+                    tmp = line[4][0]
+                    line[4][0] = line[4][1]
+                    line[4][1] = tmp
+                outline = self._write_phrasetable_file(line[0], line[1], features, phrase_align, line[4])
+                output_contr.write(outline)
+            handle_file(outfile,'close',output_contr,mode='w')
+            tmpfile = sort_file(outfile.name,tempdir=self.tempdir)
+            #TODO: Something wrong here, somehow it get null with the new assigned model
+            if (mod[2] == model1[2]):
+                model1 = (tmpfile, 1, mod[2])
+            elif (mod[2] == model2[2]):
+                model2 = (tmpfile, 1, mod[2])
+            print "finish reversing"
+
+
+
 
     def _load_line(self,line):
         # nothing found, nothing return
@@ -744,12 +822,13 @@ if __name__ == "__main__":
                                model2=args.pvttgt,
                                mode=args.mode,
                                output_file=os.path.normpath('/'.join([args.tempdir2, 'phrase-table'])),
+                               inverted=args.inverted,
                                reference_file=args.reference,
                                output_lexical=args.output_lexical,
                                lowmem=args.lowmem,
                                normalized=args.normalized,
                                recompute_lexweights=args.recompute_lexweights,
-                               tempdir=args.tempdir,
+                               tempdir=args.tempdir2,
                                number_of_features=args.number_of_features,
                                i_e2f=args.i_e2f,
                                i_e2f_lex=args.i_e2f_lex,
