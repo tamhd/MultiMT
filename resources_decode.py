@@ -15,7 +15,6 @@ from math import log, exp
 from collections import defaultdict
 from operator import mul
 from tempfile import NamedTemporaryFile
-from tmcombine import Moses, Moses_Alignment, to_list
 
 try:
     from itertools import izip
@@ -69,11 +68,12 @@ class Decode_Corpora():
     def _browse_dir(self):
         ''' browse the directory and load a hash table out of those dir
         '''
-#TODO: There might be a nicer way to concatenate directory
+        #TODO: There might be a nicer way to concatenate directory
         self.structure = defaultdict()
-        self.structure[0] = os.path.normpath('/'.join([os.getcwd(), self.cordir]))
+        #self.structure[0] = os.path.normpath('/'.join([os.getcwd(), self.cordir]))
+        self.structure[0] = os.path.abspath(self.cordir)
         # load all directories inside
-        onlydirs = [d for d in os.listdir(self.structure[0]) if os.path.isdir('/'.join([self.structure[0], d]))]
+        onlydirs = [d for d in os.listdir(self.structure[0]) if (os.path.isdir('/'.join([self.structure[0], d])) and d[:1].isalpha())]
         self.structure[1] = defaultdict(lambda: [])
         # loop through 1st layer directory
         for dir_f in onlydirs:
@@ -223,6 +223,7 @@ class Decode_Corpora():
         ''' Write to a file the format similar to eman traceback of the
             path from source to target
         '''
+        return None
 
     def _write_indexfile(self):
         '''
@@ -230,6 +231,7 @@ class Decode_Corpora():
             Next time, it might be better to load this file instead of loading the
             whole structure
         '''
+        return None
 
 
 # GLOBAL DEF
@@ -301,6 +303,9 @@ if __name__ == "__main__":
                                target=args.target,
                                corporadir=args.corporadir,
                                output_file=args.output_file)
-        print dc._monolingual_find("en")
-        print dc._bilingual_find("uk","cs")
-        print dc._triangulation_find("uk","en")
+        print "\n-------------- MONO -----------------"
+        print dc._monolingual_find(args.source)
+        print "\n-------------- BILI -----------------"
+        print dc._bilingual_find(args.source, args.target)
+        print "\n-------------- TRI ------------------"
+        print dc._triangulation_find(args.source, args.target)
