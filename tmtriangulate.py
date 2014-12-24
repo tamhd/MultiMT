@@ -54,7 +54,7 @@ def parse_command_line():
                     help='basic mixture-model algorithm. Default: %(default)s. Note: depending on mode and additional configuration, additional statistics are needed. Check docstring documentation of Triangulate_TMs() for more info.')
 
     group1.add_argument('-i', '--inverted', type=str,
-                    choices=["src-pvt","tgt-pvt",'both'],
+                    choices=['none',"src-pvt","tgt-pvt",'both'],
                     help='choose to invert the phrasetable if you don\'t have two phrase table in the form of pvt-src and pvt-tgt. You may choose to invert one of them or both of them')
 
     group1.add_argument('-r', '--reference', type=str,
@@ -494,6 +494,7 @@ class Triangulate_TMs():
             models.append(model1)
             models.append(model2)
         else:
+            # self.inverted = none or whatever
             return (model1, model2)
 
         for mod in models:
