@@ -203,7 +203,7 @@ class Merge_TM():
         if (prev_line):
             outline = self._write_phrasetable_file(prev_line)
             output_object.write(outline)
-        output_object.write("Done\n")
+        sys.stderr.write("Done\n")
         handle_file(self.output_file,'close',output_object,mode='w')
 
     def _combine_sum(self,prev_line=None,cur_line=None):
@@ -473,8 +473,7 @@ class Triangulate_TMs():
             file2obj = handle_file(os.path.join(self.model2,'model','phrase-table'), 'open', 'r')
             model1 = (file1obj, 1, 1)
             model2 = (file2obj, 1, 2)
-            self._ensure_inverted(model1, model2)
-            #print model1, model2, self.mode
+            model1, model2 = self._ensure_inverted(model1, model2)
             output_object = handle_file(self.output_file,'open',mode='w')
             self._write_phrasetable(model1, model2, output_object)
             handle_file(self.output_file,'close',output_object,mode='w')
@@ -484,7 +483,7 @@ class Triangulate_TMs():
         '''
         # do nothing for inverted
         if (not self.inverted):
-            return None
+            return (model1, model2)
 
         models=[]
         if (self.inverted == 'src-pvt'):
@@ -495,14 +494,19 @@ class Triangulate_TMs():
             models.append(model1)
             models.append(model2)
         else:
-            return None
+            return (model1, model2)
 
         for mod in models:
             outfile = NamedTemporaryFile(delete=False,dir=self.tempdir)
             output_contr = handle_file(outfile.name, 'open', mode='w')
             print "Inverse model ", mod[0], " > ", outfile.name
-        #TODO: Read line, revert the data to pvt ||| X ||| prob ||| align ||| count ||| |||
+            #TODO: Read line, revert the data to pvt ||| X ||| prob ||| align ||| count ||| |||
+            count=0
             for line in mod[0]:
+                if not count%100000:
+                    sys.stderr.write(str(count)+'...')
+                count+=1
+
                 line = self._load_line(line)
                 # reversing
                 pvt_word = line[1].strip()
@@ -538,15 +542,13 @@ class Triangulate_TMs():
                 output_contr.write(outline)
             handle_file(outfile,'close',output_contr,mode='w')
             tmpfile = sort_file(outfile.name,tempdir=self.tempdir)
-            #TODO: Something wrong here, somehow it get null with the new assigned model
+            #TODO: Check if it make senses
             if (mod[2] == model1[2]):
-                model1 = (tmpfile, 1, mod[2])
+                model1 = (tmpfile, model1[1], model1[2])
             elif (mod[2] == model2[2]):
-                model2 = (tmpfile, 1, mod[2])
-            print "finish reversing"
-
-
-
+                model2 = (tmpfile, model2[1], model2[2])
+        print "finish reversing"
+        return (model1, model2)
 
     def _load_line(self,line):
         # nothing found, nothing return
