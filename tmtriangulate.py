@@ -166,12 +166,12 @@ class Merge_TM():
 
         # define the action
         if (self.action == 'combine_given_weights'):
-            self.combine_lines = self._combine_sum
+            self._combine_lines = self._combine_sum
         elif (self.action == 'maximize_given_weights'):
-            self.combine_lines = self._combine_max
+            self._combine_lines = self._combine_max
         else:
             # by default, let say we take the sum
-            self.combine_lines = self._combine_sum
+            self._combine_lines = self._combine_sum
 
 
         for line in self.model:
