@@ -4,7 +4,7 @@ MultiMT
 
 From a source to a target via multiple pivots
 
-Author: Tam Hoang
+< Tam Hoang >
 
 ABOUT
 -----
@@ -31,3 +31,4 @@ There are two actions are provided : combine\_given\_weights and maximize\_given
 FURTHER NOTES
 -------------
 
+This project is under development ...
