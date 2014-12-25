@@ -3,8 +3,8 @@
 # ./tmtriangulate.py combine_given_weights -ps test/model1 -pt test/model2 -o test/phrase-table_sample -t tempdir
 #  This class implement a naive method for triangulation: nothing
 #  The most important part of this method is to initialize variables
-#TODO: Implement a method for inversed : src-pvt ---> pvt-src phrase table
-#TODO: Implement a mode for combine: get the maximum or the sum
+#DONE: Implement a method for inversed : src-pvt ---> pvt-src phrase table
+#DONE: Implement a mode for combine: get the maximum or the sum
 #TODO: Implement penalty (the fifth value in probabilities)
 from __future__ import division, unicode_literals
 import sys
@@ -501,7 +501,7 @@ class Triangulate_TMs():
             outfile = NamedTemporaryFile(delete=False,dir=self.tempdir)
             output_contr = handle_file(outfile.name, 'open', mode='w')
             print "Inverse model ", mod[0], " > ", outfile.name
-            #TODO: Read line, revert the data to pvt ||| X ||| prob ||| align ||| count ||| |||
+            #Read line, revert the data to pvt ||| X ||| prob ||| align ||| count ||| |||
             count=0
             for line in mod[0]:
                 if not count%100000:
