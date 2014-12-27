@@ -219,11 +219,34 @@ class Decode_Corpora():
                 trilist[pivot].append([srcside,tgtside])
 
         return trilist
-    def _write_ouputfile(self, source, target):
+    def _write_outputfile(self, source, target):
         ''' Write to a file the format similar to eman traceback of the
             path from source to target
         '''
+        mono_corpora = dc._monolingual_find(source)
+        bi_corpora = dc._bilingual_find(source, target)
+        pi_corpora = dc._triangulation_find(source, target)
+        # print mono
+        level=0
+        self._write_oneline(level,'+-', 'Corpora for LM')
+        level+=1
+        self._write_oneline(level,'|', 'LANG='+target)
+
+        self._write_oneline(level,'+-', 'Monolingual Corpora in monolingual sources')
+        for mono in mono_corpora[0]:
+            self._write_oneline(level+1, '|',mono)
+        self._write_oneline(level,'+-', 'Monolingual Corpora in multilingual sources')
+        for multi in mono_corpora[1]:
+            self._write_oneline(level+1,'|', multi)
+
+
+        # print bi
+
         return None
+
+    def _write_oneline(self,level,prefix,text):
+        array = ['|']*level
+        print ' '.join([' '.join(array), prefix, text])
 
     def _write_indexfile(self):
         '''
@@ -303,9 +326,10 @@ if __name__ == "__main__":
                                target=args.target,
                                corporadir=args.corporadir,
                                output_file=args.output_file)
-        print "\n-------------- MONO -----------------"
-        print dc._monolingual_find(args.source)
-        print "\n-------------- BILI -----------------"
-        print dc._bilingual_find(args.source, args.target)
-        print "\n-------------- TRI ------------------"
-        print dc._triangulation_find(args.source, args.target)
+        #print "\n-------------- MONO -----------------"
+        #print dc._monolingual_find(args.source)
+        #print "\n-------------- BILI -----------------"
+        #print dc._bilingual_find(args.source, args.target)
+        #print "\n-------------- TRI ------------------"
+        #print dc._triangulation_find(args.source, args.target)
+        dc._write_outputfile(args.source, args.target)
