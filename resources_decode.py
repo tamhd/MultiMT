@@ -239,13 +239,51 @@ class Decode_Corpora():
         for multi in mono_corpora[1]:
             self._write_oneline(level+1,'|', multi)
 
-
+        #print bi_corpora
         # print bi
+        level=0
+        self._write_oneline(level,'+-', 'Corpora for TM')
+        level+=1
+        self._write_oneline(level,'|', 'SRC='+source)
+        self._write_oneline(level,'|', 'TGT='+target)
+        self._write_oneline(level,'+-', 'parallel corpora')
+        bi_idx = 1
+        for bi in bi_corpora:
+            self._write_oneline(level+1,'+-', 'Pair: '+str(bi_idx))
+            self._write_oneline(level+1,'|', "SRC="+bi[0])
+            self._write_oneline(level+1,'|', "TGT="+bi[1])
+            bi_idx+=1
+        # print pivot
+        #print pi_corpora
+        self._write_oneline(level,'+-', 'Pivot corpora')
+        for pivot,value in pi_corpora.iteritems():
+            self._write_oneline(level+1,'+-', 'Pivot: '+pivot)
+            # print src-pvt
+            self._write_oneline(level+2,'+-', 'SRC='+source+'-PVT='+pivot)
+            self._write_oneline(level+2,'|', 'SRC='+source)
+            self._write_oneline(level+2,'|', 'PVT='+pivot)
+            pi_idx=1
+            for pair in value[0][0]:
+                self._write_oneline(level+3,'+-', 'Pair: '+str(pi_idx))
+                self._write_oneline(level+3,'|', "SRC="+pair[0])
+                self._write_oneline(level+3,'|', "PVT="+pair[1])
+                pi_idx+=1
+            # print pvt-tgt
+            self._write_oneline(level+2,'+-', 'TGT='+target+'-PVT='+pivot)
+            self._write_oneline(level+2,'|', 'TGT='+target)
+            self._write_oneline(level+2,'|', 'PVT='+pivot)
+            pi_idx=1
+            for pair in value[0][1]:
+                self._write_oneline(level+3,'+-', 'Pair: '+str(pi_idx))
+                self._write_oneline(level+3,'|', "PVT="+pair[0])
+                self._write_oneline(level+3,'|', "TGT="+pair[1])
+                pi_idx+=1
+
 
         return None
 
     def _write_oneline(self,level,prefix,text):
-        array = ['|']*level
+        array = ['| ']*level
         print ' '.join([' '.join(array), prefix, text])
 
     def _write_indexfile(self):
