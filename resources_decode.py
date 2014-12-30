@@ -224,7 +224,7 @@ class Decode_Corpora():
         ''' Write to a file the format similar to eman traceback of the
             path from source to target
         '''
-        mono_corpora = dc._monolingual_find(source)
+        mono_corpora = dc._monolingual_find(target)
         bi_corpora = dc._bilingual_find(source, target)
         pi_corpora = dc._triangulation_find(source, target)
         # print mono
