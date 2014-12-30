@@ -58,6 +58,7 @@ class Decode_Corpora():
         self.langslist = []
         self._load_config()
         self._browse_dir()
+        self.output_object = handle_file(self.output_file, 'open', mode='w')
 
     def _load_config(self, config_file='config.properties'):
         '''
@@ -279,15 +280,14 @@ class Decode_Corpora():
                 self._write_oneline(level+4,'|', "TGT="+pair[1])
                 pi_idx+=1
 
-
         return None
 
     def _write_oneline(self,level,prefix,text):
         array = ['| ']*level
         if (not level==0):
-            print ' '.join([' '.join(array), prefix, text])
+            self.output_object.write(' '.join([' '.join(array), prefix, text])+'\n')
         else:
-            print prefix+' '+text
+            self.output_object.write(prefix+' '+text+'\n')
 
     def _write_indexfile(self):
         '''
@@ -374,3 +374,4 @@ if __name__ == "__main__":
         #print "\n-------------- TRI ------------------"
         #print dc._triangulation_find(args.source, args.target)
         dc._write_outputfile(args.source, args.target)
+        handle_file(dc.output_file, 'close', dc.output_object,mode='w')
