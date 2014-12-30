@@ -4,6 +4,8 @@ MultiMT
 
 From a source to a target via multiple pivots
 
+-- Branch tmCreator is to create phrase tables from available corpora (assumed that we have tokenized and aligned data)
+
 < Tam Hoang >
 
 ABOUT
