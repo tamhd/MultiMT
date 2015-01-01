@@ -9,6 +9,7 @@ function die() { echo "$@" | tee FAILED >&2; exit 1 ; }
 # input : an alignment step
 
 ALI=$1 # e.g: corpora/csen/Opus.encs.ali.gz
+TM=$2
 
 CORPDIR=`dirname $ALI`
 cd $CORPDIR
@@ -61,7 +62,6 @@ echo "creating the phrase table of $PIPE"
 
 ############### create temporary dir ##################
 # delete previous tm and temp
-rm -rf tm temp
 
 maintempdir=/mnt/h/tmp
 [ -d $maintempdir ] || maintempdir=/tmp
@@ -69,13 +69,12 @@ maintempdir=/mnt/h/tmp
 tempdir=`mktemp -d $maintempdir/exp.model.XXXXXX`
 echo "COPYING corpus and alignment TO TEMPDIR: $tempdir"
 
-mkdir temp
-mkdir temp/$PIPE
+mkdir $tempdir/$PIPE
 
 # there is a difference in the file alignment.gz and the final alignment, there are two extra columns which I have no idea what is the benefit
-zcat $ALI | cut -f 1 | gzip -c > temp/$PIPE/alignment.custom.gz
-ln -sfn $SRC temp/$PIPE/corpus.src.gz
-ln -sfn $TGT temp/$PIPE/corpus.tgt.gz
+zcat $ALI | cut -f 1 | gzip -c > $tempdir/$PIPE/alignment.custom.gz
+ln -sfn $SRC $tempdir/$PIPE/corpus.src.gz
+ln -sfn $TGT $tempdir/$PIPE/corpus.tgt.gz
 
 echo "COPIED, used disk space:"
 
@@ -84,15 +83,16 @@ df $tempdir
 
 ####################### run the script ########################
 # create a directory
-mkdir tm
-mkdir tm/csuk
-mkdir tm/csuk/model
+
+[ -d $TM ] || mkdir $TM
+
+TMdir=`mktemp -d $TM/model.$PIPE.XXXXXX`
 
 $SCRIPT_ROOTDIR/training/train-model.perl \
     --force-factored-filenames \
     --first-step 4 --last-step 6 \
-    --root-dir tm/csuk \
-    --alignment-file=temp/$PIPE/alignment \
+    --root-dir $TMdir \
+    --alignment-file=$tempdir/$PIPE/alignment \
     --alignment=custom \
-    --corpus=temp/$PIPE/corpus \
+    --corpus=$tempdir/$PIPE/corpus \
     --f src --e tgt --translation-factors 0-0 --decoding-steps t0
