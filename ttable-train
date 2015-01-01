@@ -87,6 +87,7 @@ df $tempdir
 [ -d $TM ] || mkdir $TM
 
 TMdir=`mktemp -d $TM/model.$PIPE.XXXXXX`
+mkdir $TMdir/model
 
 $SCRIPT_ROOTDIR/training/train-model.perl \
     --force-factored-filenames \
