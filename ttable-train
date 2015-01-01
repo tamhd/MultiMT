@@ -10,6 +10,7 @@ function die() { echo "$@" | tee FAILED >&2; exit 1 ; }
 
 ALI=$1 # e.g: corpora/csen/Opus.encs.ali.gz
 TM=$2
+SCRIPT_ROOTDIR=/a/merkur3/thoang/eman/ufal-smt-playground/multi_playground/s.mosesgiza.f282bc2e.20140906-1739/moses/scripts
 
 CORPDIR=`dirname $ALI`
 cd $CORPDIR
@@ -54,10 +55,6 @@ SRC="$CORPDIR/$CORPUS.$SRCNAME.tok.gz"
 TGT="$CORPDIR/$CORPUS.$TGTNAME.tok.gz"
 echo "$SRC $TGT"
 
-SCRIPT_ROOTDIR=/a/merkur3/thoang/eman/ufal-smt-playground/multi_playground/s.mosesgiza.f282bc2e.20140906-1739/moses/scripts
-
-DIR=$(pwd)
-
 echo "creating the phrase table of $PIPE"
 
 ############### create temporary dir ##################
@@ -86,7 +83,7 @@ df $tempdir
 
 [ -d $TM ] || mkdir $TM
 
-TMdir=`mktemp -d $TM/model.$PIPE.XXXXXX`
+TMdir=`mktemp -d $TM/model.$PIPE.$CORPUS.XXXXXX`
 mkdir $TMdir/model
 
 $SCRIPT_ROOTDIR/training/train-model.perl \
