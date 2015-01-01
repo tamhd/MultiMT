@@ -6,13 +6,52 @@
 function die() { echo "$@" | tee FAILED >&2; exit 1 ; }
 
 ################ pass variables #####################
+# input : an alignment step
 
-SRC=$1
-TGT=$2
-ALI=$3
+ALI=$1 # e.g: corpora/csen/Opus.encs.ali.gz
+
+CORPDIR=`dirname $ALI`
+cd $CORPDIR
+CORPDIR=$(pwd)
+cd -
+
+IFS='/' read -ra ADDR <<< "$ALI"
+ALINAME=${ADDR[${#ADDR[@]} - 1 ]}
+echo $ALINAME
+
+IFS='.' read -ra ADDR2 <<< "$ALINAME"
+LENGTH=${#ADDR2[@]}
+if [ $LENGTH -lt 3 ]; then
+    die "$ALINAME does not have at lest 3 elements"
+fi
+
+if [[ "ali" != "ali" ]]; then
+    die "something wrong here"
+fi
+
+if [[ "${ADDR2[$((LENGTH - 1))]}" != "ali" ]] \
+   &&  [[ "${ADDR2[$((LENGTH - 2))]}" != "ali" ]] \
+; then
+    die "Dying for incorrect format of alignment"
+else
+    echo "The format is correct, we're good to go"
+fi
+
+CORPUS=${ADDR2[0]} || die "cannot find corpus"
+PIPE=${ADDR2[1]} || die "cannot find pipe"
+
+echo "$CORPDIR $CORPUS"
+echo "Corpus $CORPUS pipe $PIPE"
+
 # PIPE is the name of the alignment that we have
 # it is pivot-* such as: encs if we translate cs-en-uk or uk-en-cs
-PIPE="$1$2"
+
+SRCNAME=${PIPE:0:2} || die "Cannot get the source from $PIPE"
+TGTNAME=${PIPE:2:4} || die "Cannot get the target from $PIPE"
+
+SRC="$CORPDIR/$CORPUS.$SRCNAME.tok.gz"
+TGT="$CORPDIR/$CORPUS.$TGTNAME.tok.gz"
+echo "$SRC $TGT"
 
 SCRIPT_ROOTDIR=/a/merkur3/thoang/eman/ufal-smt-playground/multi_playground/s.mosesgiza.f282bc2e.20140906-1739/moses/scripts
 
@@ -21,45 +60,39 @@ DIR=$(pwd)
 echo "creating the phrase table of $PIPE"
 
 ############### create temporary dir ##################
-maintempdir=/mnt/h/tmp
-[ -d \$maintempdir ] || maintempdir=/tmp
-
-tempdir=\`mktemp -d \$maintempdir/exp.model.XXXXXX\`
-echo "COPYING corpus and alignment TO TEMPDIR: \$tempdir"
-
-# there is a difference in the file alignment.gz and the final alignment, there are two extra columns which I have no idea what is the benefit
-zcat $DIR/$PIPE/Opus.$PIPE.ali.gz | cut -f 1 | gzip -c > temp/$PIPE/alignment.custom.gz
-ln -sfn $DIR/$PIPE/Opus.en.tok.gz temp/PIPE/corpus.src.gz
-ln -sfn $DIR/$PIPE/Opus.cs.tok.gz temp/PIPE/corpus.tgt.gz
-
-echo "COPIED, used disk space:"
-
-df \$tempdir
-
-
-####################### run the script ########################
 # delete previous tm and temp
 rm -rf tm temp
 
+maintempdir=/mnt/h/tmp
+[ -d $maintempdir ] || maintempdir=/tmp
+
+tempdir=`mktemp -d $maintempdir/exp.model.XXXXXX`
+echo "COPYING corpus and alignment TO TEMPDIR: $tempdir"
+
+mkdir temp
+mkdir temp/$PIPE
+
+# there is a difference in the file alignment.gz and the final alignment, there are two extra columns which I have no idea what is the benefit
+zcat $ALI | cut -f 1 | gzip -c > temp/$PIPE/alignment.custom.gz
+ln -sfn $SRC temp/$PIPE/corpus.src.gz
+ln -sfn $TGT temp/$PIPE/corpus.tgt.gz
+
+echo "COPIED, used disk space:"
+
+df $tempdir
+
+
+####################### run the script ########################
 # create a directory
 mkdir tm
 mkdir tm/csuk
-
-# make symlink from directory to some random folder
-mkdir temp
-mkdir temp/PIPE
-# there is a difference in the file alignment.gz and the final alignment, there are two extra columns which I have no idea what is the benefit
-zcat $DIR/$PIPE/Opus.PIPE.ali.gz | cut -f 1 | gzip -c > temp/PIPE/alignment.custom.gz
-ln -sfn $DIR/$PIPE/Opus.en.tok.gz temp/PIPE/corpus.src.gz
-ln -sfn $DIR/$PIPE/Opus.cs.tok.gz temp/PIPE/corpus.tgt.gz
-
 mkdir tm/csuk/model
 
 $SCRIPT_ROOTDIR/training/train-model.perl \
     --force-factored-filenames \
     --first-step 4 --last-step 6 \
     --root-dir tm/csuk \
-    --alignment-file=temp/PIPE/alignment \
+    --alignment-file=temp/$PIPE/alignment \
     --alignment=custom \
-    --corpus=temp/PIPE/corpus \
+    --corpus=temp/$PIPE/corpus \
     --f src --e tgt --translation-factors 0-0 --decoding-steps t0
