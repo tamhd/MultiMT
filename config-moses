@@ -6,7 +6,6 @@
 # Then uk-cs is the main ttable, en and ru is the back-off model
 # 
 
-
 from __future__ import division, unicode_literals
 import sys
 import os
@@ -50,8 +49,19 @@ class Config_Moses():
         tms = tms.split(':')
         if (len(tms) < 1) :
             print "DIE BECAUSE OF WRONG FORMAT"
+        
+        for tmId in range(len(tms)):
+            if ("phrase-table" not in tms[tmId]):
+                onlyfiles = [f for f in os.listdir(tms[tmId]+b"/model/")]
+                for f in onlyfiles:
+                    if (b"phrase-table" in f):
+                        tms[tmId] += b"/model/"+f
+            else:
+                tms[tmId] = os.path.abspath(tms[tmId])
         self.ttable_main = tms[0]
         self.ttable_add = tms[1:]
+        self.num_add = len(self.ttable_add)
+        print self.ttable_main, self.ttable_add
         self.output_file = output_file
         self.input_factor = []
         self.mapping = []
@@ -66,6 +76,29 @@ class Config_Moses():
         make sure that all ttable has the same target language
         '''
         return None
+    def _write_config(self):
+        ''' write the moses.ini file
+        '''
+        # [input-factors]
+        self.input_factor.append('[input-factors]')
+        self.input_factor.append(0) # the main phrase
+        self.input_factor.append(1) # indicate additional phrase
+
+        # [mapping]
+        self.mapping.append('[mapping]')
+        self.mapping.append('0 T 0')
+        for i in range(self.num_add):
+            self.mapping.append('1 T '+str(i+1))
+
+        # [distortion-limit]
+        self.distortion_limit.append('[distortion-limit]')
+
+
+        # [feature]
+        self.feature.append('[feature]')
+        
+
+        return None 
 
 # GLOBAL DEF
 def handle_file(filename,action,fileobj=None,mode='r'):
