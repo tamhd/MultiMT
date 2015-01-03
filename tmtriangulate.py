@@ -35,7 +35,7 @@ def parse_command_line():
     group2 = parser.add_argument_group('More model combination options')
     group3 = parser.add_argument_group('Naive triangulation')
 
-    group1.add_argument('action', metavar='ACTION', choices=["combine_given_weights","maximize_given_weights"],
+    group1.add_argument('action', metavar='ACTION', choices=["combine_given_weights","maximize_given_weights","compute_by_occurrences"],
                     help='What you want to do with the models. One of %(choices)s.')
 
     group1.add_argument('-ps', metavar='DIRECTORY', dest='srcpvt',
@@ -133,7 +133,7 @@ class Merge_TM():
        The tasks which have to be done are:
         + Merge TM by summing them up
         + Merge TM by taking the maximum
-        + Prune TM by one way or another
+        + Merge TM by co-occurrence
     """
     def __init__(self,model=None,
                       output_file=None,
@@ -141,7 +141,8 @@ class Merge_TM():
                       lang_src=None,
                       lang_target=None,
                       output_lexical=None,
-                      action="combine_given_weights"
+                      action="combine_given_weights",
+                      occurrences=None
                       ):
 
         self.mode = mode
@@ -152,6 +153,7 @@ class Merge_TM():
         self.loaded = defaultdict(int)
         self.output_lexical = output_lexical
         self.action=action
+        self.occurrences=occurrences
 
     def _combine_TM(self,flag=False,prev_line=None):
         '''
@@ -161,19 +163,29 @@ class Merge_TM():
         '''
         prev_line = []
         output_object = handle_file(self.output_file,'open',mode='w')
-        count = 0
         sys.stderr.write("Start merging multiple lines ...")
 
         # define the action
         if (self.action == 'combine_given_weights'):
+            self._line_traversal = self._regular_traversal
             self._combine_lines = self._combine_sum
         elif (self.action == 'maximize_given_weights'):
+            self._line_traversal = self._regular_traversal
             self._combine_lines = self._combine_max
+        elif (self.action == 'compute_by_occurrences'):
+            self._line_traversal = self._normalized_traversal
+            self._combine_lines = self._combine_occ
         else:
             # by default, let say we take the sum
-            self._combine_lines = self._combine_sum
+            self._line_traversal = self._normalized_traversal
+            self._combine_lines = self._combine_occ
+        self._line_traversal(flag,prev_line,output_object)
+        handle_file(self.output_file,'close',output_object,mode='w')
 
-
+    def _regular_traversal(self,flag=False,prev_line=None,output_object=None):
+        ''' Traver through the phrase-table by old way, previous line is the new line
+        '''
+        count = 0
         for line in self.model:
             # print counting lines
             if not count%100000:
@@ -184,27 +196,103 @@ class Merge_TM():
             if (flag):
                 if (line[0] == prev_line[0] and line[1] == prev_line[1]):
                     # combine current sentence to previous sentence, return previous sentence
-                    prev_line_tmp = self._combine_lines(prev_line, line)
+                    prev_line = self._combine_lines(prev_line, line)
                     continue
                 else:
                 # when you get out of the identical blog, print your previous sentence
                     outline = self._write_phrasetable_file(prev_line)
                     output_object.write(outline)
+                    prev_line = line
                     flag = False
 
             elif (prev_line):
                 if (line[0] == prev_line[0] and line[1] == prev_line[1]):
                 # if you see a second sentence in a block, turn flag to True and combine
+                    prev_line = self._combine_lines(prev_line, line)
                     flag = True
+                    continue
                 else:
                     outline = self._write_phrasetable_file(prev_line)
                     output_object.write(outline)
-            prev_line = line
+                    prev_line = line
+            else:
+                # the first position
+                prev_line = line
         if (prev_line):
             outline = self._write_phrasetable_file(prev_line)
             output_object.write(outline)
         sys.stderr.write("Done\n")
-        handle_file(self.output_file,'close',output_object,mode='w')
+
+        return None
+
+    def _normalized_traversal(self,flag=False,prev_line=None,output_object=None):
+        ''' Traver through the phrase-table to re-compute the phrase by co-occurrences
+        '''
+        count = 0
+        for line in self.model:
+            # print counting lines
+            if not count%100000:
+                sys.stderr.write(str(count)+'...')
+            count+=1
+
+            line = self._load_line(line)
+            line[4][0] = self.occurrences[1][line[1]] # target
+            line[4][1] = self.occurrences[0][line[0]] # source
+            if (flag):
+                if (line[0] == prev_line[0] and line[1] == prev_line[1]):
+                    # combine current sentence to previous sentence, return previous sentence
+                    prev_line = self._combine_lines(prev_line, line)
+                    continue
+                else:
+                # when you get out of the identical blog, print your previous sentence
+                    outline = self._write_phrasetable_file(prev_line)
+                    output_object.write(outline)
+                    prev_line = line
+                    flag = False
+
+            elif (prev_line):
+                if (line[0] == prev_line[0] and line[1] == prev_line[1]):
+                # if you see a second sentence in a block, turn flag to True and combine
+                    prev_line = self._combine_lines(prev_line, line)
+                    flag = True
+                    continue
+                else:
+                    outline = self._write_phrasetable_file(prev_line)
+                    output_object.write(outline)
+                    prev_line = line
+            else:
+                # the first position
+                prev_line = line
+        if (prev_line):
+            outline = self._write_phrasetable_file(prev_line)
+            output_object.write(outline)
+        sys.stderr.write("Done\n")
+
+    def _compute_value(line):
+        '''
+        Compute the value of a single lite
+        '''
+        return None
+
+    def _combine_occ(self,prev_line=None,cur_line=None):
+        '''
+        Calculate the value of combine occ by the co-occurrence
+        rather than the probabilities
+        '''
+        #TODO: something wrong with the computation of adding number
+        # probability
+        for i in range(4):
+            prev_line[2][i] += cur_line[2][i]
+        # alignment
+        for src,key in cur_line[3].iteritems():
+            for tgt in key:
+                if (tgt not in prev_line[3][src]):
+                    prev_line[3][src].append(tgt)
+        # count
+        prev_line[4][0] = self.occurrences[1][prev_line[1]] # target
+        prev_line[4][1] = self.occurrences[0][prev_line[0]] # source
+        prev_line[4][2] += cur_line[4][2]
+        return prev_line
 
     def _combine_sum(self,prev_line=None,cur_line=None):
         '''
@@ -290,6 +378,10 @@ class Merge_TM():
         # convert data to appropriate format
         # probability
         src,tgt,features,alignment,word_counts = line[:5]
+        #if (self.action == "compute_by_occurrences"):
+        #    word_counts[0] = self.occurrences[1][tgt]
+        #    word_counts[1] = self.occurrences[0][src]
+
         features = b' '.join([b'%.6g' %(f) for f in features])
 
         alignments = []
@@ -360,7 +452,9 @@ class Triangulate_TMs():
         self.flags['i_e2f_lex'] = int(self.flags['i_e2f_lex'])
         self.flags['i_f2e'] = int(self.flags['i_f2e'])
         self.flags['i_f2e_lex'] = int(self.flags['i_f2e_lex'])
-
+        # the number of occurrences of source - 0 and target - 1
+        self.src_occ = defaultdict()
+        self.tgt_occ = defaultdict()
         # Variable 'mode' is preserved to prepare for multiple way of trianuglating.
         # At this moment, it is  interpolate
         if mode not in ['interpolate']:
@@ -698,6 +792,16 @@ class Triangulate_TMs():
 
         if (len(count1) > 2):
             word_count[2] = min(long(float(count1[2])),long(float(count2[2])))
+        # update the src-occ
+        if (src in self.src_occ):
+            self.src_occ[src]+= word_count[2]
+        else:
+            self.src_occ[src] = word_count[2]
+        if (target in self.tgt_occ):
+            self.tgt_occ[target]+= word_count[2]
+        else:
+            self.tgt_occ[target] = word_count[2]
+
         return word_count
 
 
@@ -848,5 +952,6 @@ if __name__ == "__main__":
         merger = Merge_TM(model=tmpfile,
                           output_file=args.output,
                           mode=combiner.mode,
-                          action=args.action)
+                          action=args.action,
+                          occurrences=[combiner.src_occ, combiner.tgt_occ])
         merger._combine_TM()
