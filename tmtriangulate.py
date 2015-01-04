@@ -769,7 +769,7 @@ class Triangulate_TMs():
             for pair in align2.split(b' '):
                 p,t = pair.split(b'-')
                 p,t = int(p),int(t)
-                phrase_t[p].append(t)
+                phrase_pt[p].append(t)
         except:
             pass
 
@@ -782,7 +782,6 @@ class Triangulate_TMs():
                     for tgt_id in tgt_lst:
                         if (tgt_id not in phrase_st[src_id]):
                             phrase_st[src_id].append(tgt_id)
-
         return phrase_st
 
 
