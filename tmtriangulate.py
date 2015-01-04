@@ -13,7 +13,7 @@ import gzip
 import argparse
 import copy
 import re
-from math import log, exp
+from math import log, exp, sqrt
 from collections import defaultdict
 from operator import mul
 from tempfile import NamedTemporaryFile
@@ -56,6 +56,11 @@ def parse_command_line():
     group1.add_argument('-i', '--inverted', type=str,
                     choices=['none',"src-pvt","tgt-pvt",'both'],
                     help='choose to invert the phrasetable if you don\'t have two phrase table in the form of pvt-src and pvt-tgt. You may choose to invert one of them or both of them')
+
+    group1.add_argument('-co', '--co-occurrences', dest='computation',
+                    default="minimum",
+                    choices=['minimum',"maximum","arithmetic-mean",'geometric-mean'],
+                    help='choose to measures the co-occurrences if the action is compute_by_occurrences, you have 4 options: minimum, maximum, arithmetic mean and geometric mean')
 
     group1.add_argument('-r', '--reference', type=str,
                     default=None,
@@ -155,6 +160,7 @@ class Merge_TM():
         self.action=action
         self.occurrences=occurrences
 
+
     def _combine_TM(self,flag=False,prev_line=None):
         '''
         Summing up the probability
@@ -162,6 +168,7 @@ class Merge_TM():
         Get the sum of counts
         '''
         prev_line = []
+        sys.stderr.write("\nCombine Multiple lines by option: " + self.action + "\n")
         output_object = handle_file(self.output_file,'open',mode='w')
         sys.stderr.write("Start merging multiple lines ...")
 
@@ -272,8 +279,14 @@ class Merge_TM():
         # src and tgt are the same
 
         # probability
-        line[2][0] = coocc/count_t # p(s|t)
-        line[2][2] = coocc/count_s # p(t|s)
+        if (coocc == 0 and count_t == 0):
+            line[2][0] = 0
+        else:
+            line[2][0] = coocc/count_t # p(s|t)
+        if (coocc == 0 and count_s == 0):
+            line[2][2] = 0
+        else:
+            line[2][2] = coocc/count_s # p(t|s)
         return line
 
     def _combine_occ(self,prev_line=None,cur_line=None):
@@ -432,6 +445,8 @@ class Triangulate_TMs():
                       output_file=None,
                       mode='interpolate',
                       inverted=None,
+                      action=None,
+                      computed=None,
                       tempdir=None,
                       number_of_features=4,
                       lang_src=None,
@@ -466,6 +481,16 @@ class Triangulate_TMs():
         number_of_features = int(number_of_features)
         self.model1=model1
         self.model2=model2
+        self.action = action
+        self.computed = get_minimum_counts
+        if (self.action == 'compute_by_occurrences'):
+            if (computed == 'maximum'):
+                print "MAXXXXXXXXXXXXXXXX"
+                self.computed = get_maximum_counts
+            elif(computed == 'arithmetic-mean'):
+                self.computed = get_arithmetic_mean
+            elif(computed == 'geometric-mean'):
+                self.computed = get_geometric_mean
 
         #self.score = score_interpolate
 
@@ -797,7 +822,7 @@ class Triangulate_TMs():
         word_count[1] = long(float(count1[0]))
 
         if (len(count1) > 2):
-            word_count[2] = min(long(float(count1[2])),long(float(count2[2])))
+            word_count[2] = self.computed(long(float(count1[2])),long(float(count2[2])))
         # update the src-occ
         if (src in self.src_occ):
             self.src_occ[src]+= word_count[2]
@@ -809,7 +834,6 @@ class Triangulate_TMs():
             self.tgt_occ[target] = word_count[2]
 
         return word_count
-
 
     def _write_phrasetable(self,model1,model2,output_object,inverted=False):
         """Incrementally load phrase tables, calculate score for increment and write it to output_object"""
@@ -917,6 +941,24 @@ def dot_product(a,b):
 
     return s
 
+def get_minimum_counts(count1, count2):
+    ''' get the mimimum occurrences between two occurrences
+    '''
+    return min(count1,count2)
+
+def get_maximum_counts(count1, count2):
+    ''' get the maximum occurrences between two occurrences
+    '''
+    return max(count1,count2)
+
+def get_arithmetic_mean(count1, count2):
+    ''' get arithmetic mean between two numbers
+    '''
+    return (count1+count2)/2
+def get_geometric_mean(count1, count2):
+    ''' get the geometric mean between two numbers
+    '''
+    return sqrt(count1*count2)
 
 
 if __name__ == "__main__":
@@ -936,6 +978,8 @@ if __name__ == "__main__":
                                mode=args.mode,
                                output_file=os.path.normpath('/'.join([args.tempdir2, 'phrase-table'])),
                                inverted=args.inverted,
+                               action=args.action,
+                               computed=args.computation,
                                reference_file=args.reference,
                                output_lexical=args.output_lexical,
                                lowmem=args.lowmem,
