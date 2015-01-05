@@ -30,7 +30,7 @@ def parse_command_line():
 
     parser = argparse.ArgumentParser(description="Combine translation models. Check DOCSTRING of the class Triangulate_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples")
 
-    group1 = parser.add_argument_group('Main options')
+     group1 = parser.add_argument_group('Main options')
     group2 = parser.add_argument_group('More model combination options')
     group3 = parser.add_argument_group('Naive triangulation')
 
@@ -130,10 +130,19 @@ class to_list(argparse.Action):
          setattr(namespace, self.dest, values)
 
 
+# New configuration of Moses class
 
+class Moses:
+    ''' Moses interface for loading/writing models
+        It keeps the value of src-pvt word count
+    '''
+    def __init__(self, number_of_features=4):
+        self.number_of_features = number_of_features
 
+        self.word_pairs_e2f = defaultdict(lambda: defaultdict())
+        self.word_pair_f2e = defaultdict(lambda:defaultdict())
 
-
+    # when you read the alignment, save the count of word here, for example: e2f[src][tgt] = 4, f2e[tgt][src] = 3
 
 #merge the noisy phrase table
 class Merge_TM():
@@ -356,67 +365,6 @@ class Merge_TM():
         return prev_line
 
 
-    def _load_line(self,line):
-        if (not line):
-            return None
-        ''' This function convert a string into an array of string and probability
-        '''
-        #print "line : ", line
-        line = line.rstrip().split(b'|||')
-        if line[-1].endswith(b' |||'):
-            line[-1] = line[-1][:-4]
-            line.append(b'')
-
-        # remove the blank space
-        line[0] = line[0].strip()
-        line[1] = line[1].strip()
-
-        # break the probability
-        line[2]  = [float(i) for i in line[2].strip().split(b' ')]
-
-        # break the alignment
-        phrase_align = defaultdict(lambda: []*3)
-        for pair in line[3].strip().split(b' '):
-            try:
-                s,t = pair.split(b'-')
-                s,t = int(s),int(t)
-                phrase_align[s].append(t)
-            except:
-                #print "Infeasible pair ", pair
-                pass
-        line[3] = phrase_align
-        # break the count
-        # sometimes, the count is too big
-        line[4] = [long(float(i)) for i in line[4].strip().split(b' ')]
-
-        return line
-    def _write_phrasetable_file(self,line):
-        '''
-        write the phrase table line
-        '''
-        # convert data to appropriate format
-        # probability
-        src,tgt,features,alignment,word_counts = line[:5]
-        #if (self.action == "compute_by_occurrences"):
-        #    word_counts[0] = self.occurrences[1][tgt]
-        #    word_counts[1] = self.occurrences[0][src]
-
-        features = b' '.join([b'%.6g' %(f) for f in features])
-
-        alignments = []
-        for src_id,tgt_id_list in alignment.iteritems():
-            for tgt_id in sorted(tgt_id_list):
-                alignments.append(str(src_id) + '-' + str(tgt_id))
-        extra_space = b''
-        if(len(alignments)):
-            extra_space = b' '
-        alignments = b' '.join(str(x) for x in alignments)
-
-        word_counts = b' '.join([b'%.6g' %(f) for f in word_counts])
-
-        line = b"%s ||| %s ||| %s ||| %s%s||| %s ||| |||\n" %(src,tgt,features,alignments,extra_space,word_counts)
-        return line
-
 
 class Triangulate_TMs():
     """This class handles the various options, checks them for sanity and has methods that define what models to load and what functions to call for the different tasks.
@@ -497,7 +445,7 @@ class Triangulate_TMs():
             elif(computed == 'geometric-mean'):
                 self.computed = get_geometric_mean
 
-        #self.score = score_interpolate
+        self.model = Moses(4)
 
     def _sanity_checks(self,models,number_of_features):
         """check if input arguments make sense
@@ -507,80 +455,9 @@ class Triangulate_TMs():
         #Note: This is a function which I borrow from TMCombine, however, it has not been used at all :)
         return None
 
-
-
-    def _ensure_loaded(self,data):
-        """load data (lexical tables; reference alignment; phrase table), if it isn't already in memory"""
-        #Note:  This is a function which I borrow from TMCombine, however, it has not been used at all :)
-
-        if 'lexical' in data:
-            self.model_interface.require_alignment = True
-
-        if 'reference' in data and not self.loaded['reference']:
-
-            sys.stderr.write('Loading word pairs from reference set...')
-            self.reference_interface.load_word_pairs(self.lang_src,self.lang_target)
-            sys.stderr.write('done\n')
-            self.loaded['reference'] = 1
-
-        if 'lexical' in data and not self.loaded['lexical']:
-
-            sys.stderr.write('Loading lexical tables...')
-            self.model_interface.load_lexical_tables(self.models,self.mode)
-            sys.stderr.write('done\n')
-            self.loaded['lexical'] = 1
-
-        if 'pt-filtered' in data and not self.loaded['pt-filtered']:
-
-            models_prioritized = [(self.model_interface.open_table(model,'phrase-table'),priority,i) for (model,priority,i) in priority_sort_models(self.models)]
-
-            for model,priority,i in models_prioritized:
-                sys.stderr.write('Loading phrase table ' + str(i) + ' (only data relevant for reference set)')
-                j = 0
-                for line in model:
-                    if not j % 1000000:
-                        sys.stderr.write('...'+str(j))
-                    j += 1
-                    line = line.rstrip().split(b' ||| ')
-                    if line[-1].endswith(b' |||'):
-                        line[-1] = line[-1][:-4]
-                        line.append('')
-                    self.model_interface.load_phrase_features(line,priority,i,store='all',mode=self.mode,filter_by=self.reference_interface.word_pairs,filter_by_src=self.reference_interface.word_source,filter_by_target=self.reference_interface.word_target,flags=self.flags)
-                sys.stderr.write(' done\n')
-
-            self.loaded['pt-filtered'] = 1
-
-        if 'lexical-filtered' in data and not self.loaded['lexical-filtered']:
-            e2f_filter, f2e_filter = _get_lexical_filter(self.reference_interface,self.model_interface)
-
-            sys.stderr.write('Loading lexical tables (only data relevant for reference set)...')
-            self.model_interface.load_lexical_tables(self.models,self.mode,e2f_filter=e2f_filter,f2e_filter=f2e_filter)
-            sys.stderr.write('done\n')
-            self.loaded['lexical-filtered'] = 1
-
-        if 'pt-target' in data and not self.loaded['pt-target']:
-
-            models_prioritized = [(self.model_interface.open_table(model,'phrase-table'),priority,i) for (model,priority,i) in priority_sort_models(self.models)]
-
-            for model,priority,i in models_prioritized:
-                sys.stderr.write('Loading target information from phrase table ' + str(i))
-                j = 0
-                for line in model:
-                    if not j % 1000000:
-                        sys.stderr.write('...'+str(j))
-                    j += 1
-                    line = line.rstrip().split(b' ||| ')
-                    if line[-1].endswith(b' |||'):
-                        line[-1] = line[-1][:-4]
-                        line.append('')
-                    self.model_interface.load_phrase_features(line,priority,i,mode=self.mode,store='target',flags=self.flags)
-                sys.stderr.write(' done\n')
-
-            self.loaded['pt-target'] = 1
-
-    ############################################################################################################
     def combine_standard(self,weights=None):
-        """write a new phrase table, based on existing weights of two other tables"""
+        """write a new phrase table, based on existing weights of two other tables
+           Indeed, all processes start here"""
         data = []
 
         if self.mode == 'interpolate':
@@ -675,19 +552,6 @@ class Triangulate_TMs():
                 model2 = (tmpfile, model2[1], model2[2])
         print "finish reversing"
         return (model1, model2)
-
-    def _load_line(self,line):
-        # nothing found, nothing return
-        if (not line):
-            return None
-        ''' This function convert a string into an array of string and probability
-        '''
-        line = line.rstrip().split(b'|||')
-        if line[-1].endswith(b' |||'):
-            line[-1] = line[-1][:-4]
-            line.append(b'')
-
-        return line
 
 
     def _phrasetable_traversal(self,model1,model2,prev_line1,prev_line2,deci,output_object,iteration):
@@ -857,26 +721,6 @@ class Triangulate_TMs():
         sys.stderr.write("done")
 
 
-    def _write_phrasetable_file(self,src,tgt,features,alignment,word_counts):
-        ''' Output the line in Moses format
-        '''
-        # convert data to appropriate format
-        features = b' '.join([b'%.6g' %(f) for f in features])
-
-        alignments = []
-        for src_id,tgt_id_list in alignment.iteritems():
-            for tgt_id in sorted(tgt_id_list):
-                alignments.append(str(src_id) + '-' + str(tgt_id))
-        extra_space = b''
-        if(len(alignments)):
-            extra_space = b' '
-        alignments = b' '.join(str(x) for x in alignments)
-
-        word_counts = b' '.join([b'%.6g' %(f) for f in word_counts])
-
-        line = b"%s ||| %s ||| %s ||| %s%s||| %s ||| |||\n" %(src,tgt,features,alignments,extra_space,word_counts)
-        return line
-
 # GLOBAL DEF
 def handle_file(filename,action,fileobj=None,mode='r'):
     """support reading/writing either from/to file, stdout or gzipped file"""
@@ -964,6 +808,69 @@ def get_geometric_mean(count1, count2):
     ''' get the geometric mean between two numbers
     '''
     return sqrt(count1*count2)
+
+
+
+def _load_line(self,line):
+    if (not line):
+        return None
+    ''' This function convert a string into an array of string and probability
+        src ||| tgt ||| s|t s|t t|s t|s ||| align ||| countt counts countst ||| |||
+    '''
+    #print "line : ", line
+    line = line.rstrip().split(b'|||')
+    if line[-1].endswith(b' |||'):
+        line[-1] = line[-1][:-4]
+        line.append(b'')
+
+    # remove the blank space
+    line[0] = line[0].strip()
+    line[1] = line[1].strip()
+
+    # break the probability
+    line[2]  = [float(i) for i in line[2].strip().split(b' ')]
+
+    # break the alignment
+    phrase_align = defaultdict(lambda: []*3)
+    for pair in line[3].strip().split(b' '):
+        try:
+            s,t = pair.split(b'-')
+            s,t = int(s),int(t)
+            phrase_align[s].append(t)
+        except:
+            #print "Infeasible pair ", pair
+                pass
+    line[3] = phrase_align
+    # break the count
+    # sometimes, the count is too big, save it as long
+    line[4] = [long(float(i)) for i in line[4].strip().split(b' ')]
+
+    return line
+def _write_phrasetable_file(self,line):
+    '''
+    write the phrase table line
+    '''
+    # convert data to appropriate format
+    # probability
+    src,tgt,features,alignment,word_counts = line[:5]
+    #if (self.action == "compute_by_occurrences"):
+    #    word_counts[0] = self.occurrences[1][tgt]
+    #    word_counts[1] = self.occurrences[0][src]
+    features = b' '.join([b'%.6g' %(f) for f in features])
+
+    alignments = []
+    for src_id,tgt_id_list in alignment.iteritems():
+        for tgt_id in sorted(tgt_id_list):
+            alignments.append(str(src_id) + '-' + str(tgt_id))
+    extra_space = b''
+    if(len(alignments)):
+        extra_space = b' '
+    alignments = b' '.join(str(x) for x in alignments)
+
+    word_counts = b' '.join([b'%.6g' %(f) for f in word_counts])
+
+    outline = b"%s ||| %s ||| %s ||| %s%s||| %s ||| |||\n" %(src,tgt,features,alignments,extra_space,word_counts)
+    return outline
 
 
 if __name__ == "__main__":
