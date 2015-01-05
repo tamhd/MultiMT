@@ -3,9 +3,9 @@
 # ./tmtriangulate.py combine_given_weights -ps test/model1 -pt test/model2 -o test/phrase-table_sample -t tempdir
 #  This class implement a naive method for triangulation: nothing
 #  The most important part of this method is to initialize variables
-#DONE: Implement a method for inversed : src-pvt ---> pvt-src phrase table
-#DONE: Implement a mode for combine: get the maximum or the sum
-#TODO: Implement penalty (the fifth value in probabilities)
+
+#TODO: Implement a totally new method for computing the probabilities and lexical weights by the occurrences and co-occurrences
+
 from __future__ import division, unicode_literals
 import sys
 import os
@@ -29,7 +29,6 @@ except:
 def parse_command_line():
 
     parser = argparse.ArgumentParser(description="Combine translation models. Check DOCSTRING of the class Triangulate_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples")
-
 
     group1 = parser.add_argument_group('Main options')
     group2 = parser.add_argument_group('More model combination options')
@@ -129,6 +128,12 @@ class to_list(argparse.Action):
          else:
              values = [float(x) for x in weights.split(',')]
          setattr(namespace, self.dest, values)
+
+
+
+
+
+
 
 #merge the noisy phrase table
 class Merge_TM():
