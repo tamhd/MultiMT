@@ -30,7 +30,7 @@ def parse_command_line():
 
     parser = argparse.ArgumentParser(description="Combine translation models. Check DOCSTRING of the class Triangulate_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples")
 
-     group1 = parser.add_argument_group('Main options')
+    group1 = parser.add_argument_group('Main options')
     group2 = parser.add_argument_group('More model combination options')
     group3 = parser.add_argument_group('Naive triangulation')
 
@@ -142,6 +142,9 @@ class Moses:
         self.word_pairs_e2f = defaultdict(lambda: defaultdict())
         self.word_pair_f2e = defaultdict(lambda:defaultdict())
 
+        self.phrase_count_e = defaultdict()
+        self.phrase_count_f = defaultdict()
+
     # when you read the alignment, save the count of word here, for example: e2f[src][tgt] = 4, f2e[tgt][src] = 3
 
 #merge the noisy phrase table
@@ -160,8 +163,8 @@ class Merge_TM():
                       lang_src=None,
                       lang_target=None,
                       output_lexical=None,
-                      action="combine_given_weights",
-                      occurrences=None
+                      action="compute_by_occurrences",
+                      moses_interface=None
                       ):
 
         self.mode = mode
@@ -172,7 +175,7 @@ class Merge_TM():
         self.loaded = defaultdict(int)
         self.output_lexical = output_lexical
         self.action=action
-        self.occurrences=occurrences
+        self.moses_interface=moses_interface
 
 
     def _combine_TM(self,flag=False,prev_line=None):
@@ -213,7 +216,7 @@ class Merge_TM():
                 sys.stderr.write(str(count)+'...')
             count+=1
 
-            line = self._load_line(line)
+            line = _load_line(line)
             if (flag):
                 if (line[0] == prev_line[0] and line[1] == prev_line[1]):
                     # combine current sentence to previous sentence, return previous sentence
@@ -256,7 +259,7 @@ class Merge_TM():
                 sys.stderr.write(str(count)+'...')
             count+=1
 
-            line = self._load_line(line)
+            line = _load_line(line)
             line[4][0] = self.occurrences[1][line[1]] # target
             line[4][1] = self.occurrences[0][line[0]] # source
             if (prev_line):
@@ -421,9 +424,6 @@ class Triangulate_TMs():
         self.flags['i_e2f_lex'] = int(self.flags['i_e2f_lex'])
         self.flags['i_f2e'] = int(self.flags['i_f2e'])
         self.flags['i_f2e_lex'] = int(self.flags['i_f2e_lex'])
-        # the number of occurrences of source - 0 and target - 1
-        self.src_occ = defaultdict()
-        self.tgt_occ = defaultdict()
         # Variable 'mode' is preserved to prepare for multiple way of trianuglating.
         # At this moment, it is  interpolate
         if mode not in ['interpolate']:
@@ -438,14 +438,14 @@ class Triangulate_TMs():
         self.computed = get_minimum_counts
         if (self.action == 'compute_by_occurrences'):
             if (computed == 'maximum'):
-                print "MAXXXXXXXXXXXXXXXX"
                 self.computed = get_maximum_counts
             elif(computed == 'arithmetic-mean'):
                 self.computed = get_arithmetic_mean
             elif(computed == 'geometric-mean'):
                 self.computed = get_geometric_mean
 
-        self.model = Moses(4)
+        # The model to keep word count
+        self.moses_interface = Moses(4)
 
     def _sanity_checks(self,models,number_of_features):
         """check if input arguments make sense
@@ -457,7 +457,7 @@ class Triangulate_TMs():
 
     def combine_standard(self,weights=None):
         """write a new phrase table, based on existing weights of two other tables
-           Indeed, all processes start here"""
+           #NOTE: Indeed, all processes start here"""
         data = []
 
         if self.mode == 'interpolate':
@@ -465,8 +465,6 @@ class Triangulate_TMs():
                 data.append('lexical')
             if self.flags['normalized'] and self.flags['normalize_s_given_t'] == 't' and not self.flags['lowmem']:
                 data.append('pt-target')
-
-        #self._ensure_loaded(data)
 
         if self.flags['lowmem'] and (self.mode == 'counts' or self.flags['normalized'] and self.flags['normalize_s_given_t'] == 't'):
             self._inverse_wrapper(weights,tempdir=self.flags['tempdir'])
@@ -510,13 +508,13 @@ class Triangulate_TMs():
                     sys.stderr.write(str(count)+'...')
                 count+=1
 
-                line = self._load_line(line)
+                line = _load_line(line)
                 # reversing
                 pvt_word = line[1].strip()
                 line[1] = line[0].strip()
                 line[0] = pvt_word
                 # reverse probability
-                features = [float(f) for f in line[2].strip().split(b' ')]
+                features = line[2]
                 tmp = features[0]
                 features[0] = features[2]
                 features[2] = tmp
@@ -526,17 +524,11 @@ class Triangulate_TMs():
 
                 # reverse alignment
                 phrase_align = defaultdict(lambda: []*3)
-                for pair in line[3].strip().split(b' '):
-                    try:
-                        t,s = pair.split(b'-')
-                        t,s = int(t),int(s)
-                        phrase_align[s].append(t)
-                    except:
-                        #print "Infeasible pair ", pair
-                        pass
+                for s,t_list in line[3].iteritems():
+                    for t in t_list:
+                        phrase_align[t].append(s)
                 # break the count
                 # sometimes, the count is too big
-                line[4] = [long(float(i)) for i in line[4].strip().split(b' ')]
                 if (len(line[4]) > 1):
                     tmp = line[4][0]
                     line[4][0] = line[4][1]
@@ -558,23 +550,21 @@ class Triangulate_TMs():
         ''' A non-recursive way to read two model
             Notes: In moses phrase table, the longer phrase appears earlier than the short phrase
         '''
-        line1 =  self._load_line(model1[0].readline())
-        line2 =  self._load_line(model2[0].readline())
+        line1 =  _load_line(model1[0].readline())
+        line2 =  _load_line(model2[0].readline())
         count = 0
         while(1):
             if not count%100000:
                 sys.stderr.write(str(count)+'...')
             count+=1
-            #if (count > 300000 and count < 400000):
-                #print line1, line2
             if (self.phrase_equal[0]):
                 if (line1 and line1[0] == self.phrase_equal[0]):
                     self.phrase_equal[1].append(line1)
-                    line1 =  self._load_line(model1[0].readline())
+                    line1 =  _load_line(model1[0].readline())
                     continue
                 elif (line2 and line2[0] == self.phrase_equal[0]):
                     self.phrase_equal[2].append(line2)
-                    line2 = self._load_line(model2[0].readline())
+                    line2 = _load_line(model2[0].readline())
                     continue
                 else:
                     self._combine_and_print(output_object)
@@ -591,13 +581,13 @@ class Triangulate_TMs():
                 if (line1[0] == line2[0]):
                     self.phrase_equal[0] = line1[0]
                 elif (line1[0].startswith(line2[0])):
-                    line1 = self._load_line(model1[0].readline())
+                    line1 = _load_line(model1[0].readline())
                 elif (line2[0].startswith(line1[0])):
-                    line2 = self._load_line(model2[0].readline())
+                    line2 = _load_line(model2[0].readline())
                 elif (line1[0] < line2[0]):
-                    line1 = self._load_line(model1[0].readline())
+                    line1 = _load_line(model1[0].readline())
                 elif (line1[0] > line2[0]):
-                    line2 = self._load_line(model2[0].readline())
+                    line2 = _load_line(model2[0].readline())
 
     def _combine_and_print(self,output_object):
         ''' Follow Cohn at el.2007
@@ -611,31 +601,50 @@ class Triangulate_TMs():
             for phrase2 in self.phrase_equal[2]:
                 if (phrase1[0] != phrase2[0]):
                     sys.exit("THE PIVOTS ARE DIFFERENT")
-                src = phrase1[1].strip()
-                tgt = phrase2[1].strip()
-                if (not isinstance(phrase1[2],list)):
-                    phrase1[2] = [float(i) for i in phrase1[2].strip().split()]
-                if (not isinstance(phrase2[2],list)):
-                    phrase2[2] = [float(j) for j in phrase2[2].strip().split()]
+                src, tgt = phrase1[1], phrase2[1]
 
                 #self.phrase_probabilities=[0]*4
                 # A-B = A|B|P(A|B) L(A|B) P(B|A) L(B|A)
                 # A-C = A|C|P(A|C) L(A|C) P(C|A) L(C|A)
                 ## B-C = B|C|P(B|C) L(B|C) P(C|B) L(C|B)
 
-                features = self._get_features(src, tgt, phrase1[2], phrase2[2])
-                word_alignments = self._get_word_alignments(src, tgt, phrase1[3].strip(), phrase2[3].strip())
-                word_counts = self._get_word_counts(src, tgt, phrase1[4].strip(), phrase2[4].strip())
-                outline =  self._write_phrasetable_file(src,tgt,features,word_alignments,word_counts)
+                features = self._get_features_Cohn(src, tgt, phrase1[2], phrase2[2])
+                word_alignments = self._get_word_alignments(src, tgt, phrase1[3], phrase2[3])
+                word_counts = self._get_word_counts(src, tgt, phrase1[4], phrase2[4])
+                outline = _write_phrasetable_file([src,tgt,features,word_alignments,word_counts])
                 output_object.write(outline)
+                self._update_moses(src,tgt,word_alignments,word_counts)
 
         # reset the memory
         self.phrase_equal = None
         self.phrase_equal = defaultdict(lambda: []*3)
 
-        self.phrase_equal = defaultdict(lambda: []*3)
 
-    def _get_features(self,src,target,feature1,feature2):
+    def _update_moses(self, src, tgt, word_alignments, word_counts):
+        ''' Update following variables: word counts e2f, f2e, phrase count e, f
+        '''
+        # phrase count
+        if (src in self.moses_interface.phrase_count_e):
+            self.moses_interface.phrase_count_e[src]+= word_counts[2]
+        else:
+            self.moses_interface.phrase_count_e[src] = word_counts[2]
+
+        if (tgt in self.moses_interface.phrase_count_f):
+            self.moses_interface.phrase_count_f[tgt]+= word_counts[2]
+        else:
+            self.moses_interface.phrase_count_f[tgt] = word_counts[2]
+
+        srcphrase = src.split(b' ')
+        tgtphrase = tgt.split(b' ')
+
+        for src_id, tgt_lst in word_alignments.iteritems():
+            for tgt_id in tgt_lst:
+                self.moses_interface.word_pairs_e2f[srcphrase[src_id]][tgtphrase[tgt_id]] += word_counts[2]
+                self.moses_interface.word_pairs_f2e[tgtphrase[tgt_id]][srcphrase[src_id]] += word_counts[2]
+
+        return None
+
+    def _get_features_Cohn(self,src,target,feature1,feature2):
         """from the Moses phrase table probability, get the new probability
            TODO: the phrase penalty value?
         """
@@ -685,23 +694,9 @@ class Triangulate_TMs():
            the word count is: target - src - both
         """
         word_count = [0]*3
-        count1 = count1.split(b' ')
-        count2 = count2.split(b' ')
-        word_count[0] = long(float(count2[0]))
-        word_count[1] = long(float(count1[0]))
 
         if (len(count1) > 2):
             word_count[2] = self.computed(long(float(count1[2])),long(float(count2[2])))
-        # update the src-occ
-        if (src in self.src_occ):
-            self.src_occ[src]+= word_count[2]
-        else:
-            self.src_occ[src] = word_count[2]
-        if (target in self.tgt_occ):
-            self.tgt_occ[target]+= word_count[2]
-        else:
-            self.tgt_occ[target] = word_count[2]
-
         return word_count
 
     def _write_phrasetable(self,model1,model2,output_object,inverted=False):
@@ -811,7 +806,7 @@ def get_geometric_mean(count1, count2):
 
 
 
-def _load_line(self,line):
+def _load_line(line):
     if (not line):
         return None
     ''' This function convert a string into an array of string and probability
@@ -846,7 +841,8 @@ def _load_line(self,line):
     line[4] = [long(float(i)) for i in line[4].strip().split(b' ')]
 
     return line
-def _write_phrasetable_file(self,line):
+
+def _write_phrasetable_file(line):
     '''
     write the phrase table line
     '''
@@ -915,5 +911,5 @@ if __name__ == "__main__":
                           output_file=args.output,
                           mode=combiner.mode,
                           action=args.action,
-                          occurrences=[combiner.src_occ, combiner.tgt_occ])
+                          moses_interface=combiner.moses_interface)
         merger._combine_TM()
