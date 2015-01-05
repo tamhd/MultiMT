@@ -175,6 +175,8 @@ class Config_Moses():
         self.weight.append('LM0= 0.5')
         self.weight.append('PhrasePenalty0= 0.2')
         self.weight.append('TranslationModel0= 0.2 0.2 0.2 0.2')
+        for tmId in range(len(self.ttable_add)):
+            self.weight.append('TranslationModel' + str(tmId+1) + '= 0.2 0.2 0.2 0.2')
         self.weight.append('UnknownWordPenalty0= 1')
         self.weight.append('WordPenalty= -1')
         
