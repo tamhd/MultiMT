@@ -145,10 +145,40 @@ class Moses:
         self.phrase_count_e = defaultdict(long)
         self.phrase_count_f = defaultdict(long)
 
+    def _compute_lexical_weight(self,src,tgt,alignment):
+        '''
+        compute the lexical weight in phrase table based on the co-occurrence of word count
+        '''
+        word_pairs = self.word_pairs_e2f
+        align_rev = defaultdict(lambda: [])
+
+        phrase_src = src.split(b' ')
+        phrase_tgt = tgt.split(b' ')
+        # lexical (s|t)
+        lexical_weight_st = 1
+        for src_id,tgt_lst in alignment.iteritems():
+            count_s = sum(word_pairs[phrase_src[src_id]].values())
+            count_s_t = []
+            for tgt_id in tgt_lst:
+                align_rev[phrase_tgt[tgt_id]].append(phrase_src[src_id])
+                count_s_t.append(word_pairs[phrase_src[src_id]][phrase_tgt[tgt_id]])
+            lexical_weight_st *= 1.0/len(count_s_t) * float(sum(count_s_t))/count_s
+        # lexical (t|s)
+        lexical_weight_ts = 1
+        word_pairs2 = self.word_pairs_f2e
+        for tgtw, src_lst in align_rev.iteritems():
+            count_t = sum(word_pairs2[tgtw].values())
+            count_t_s = []
+            for srcw in src_lst:
+                count_t_s.append(word_pairs2[tgtw][srcw])
+            lexical_weight_ts *= 1.0/len(count_t_s) * float(sum(count_t_s))/count_t
+
+        return lexical_weight_st, lexical_weight_ts
+
     # when you read the alignment, save the count of word here, for example: e2f[src][tgt] = 4, f2e[tgt][src] = 3
 
-    def _write_lexical_file(self,path,direction):
-        ''' print the lexical file based on word pairs
+    def _write_lexical_count(self,path,direction):
+        ''' print the lexical file based on word pairs count
         '''
         output_lex = handle_file("{0}{1}.{2}".format(path,"/lex",direction), 'open', mode='w')
         if direction == "e2f":
@@ -159,6 +189,21 @@ class Moses:
         for x in sorted(word_pairs):
             for y in sorted(word_pairs[x]):
                 output_lex.write(b"%s %s %s\n" %(x,y,(word_pairs[x][y])))
+        handle_file("{0}{1}.{2}".format(path,"/lex",direction),'close',output_lex,mode='w')
+
+    def _write_lexical_prob(self,path,direction):
+        ''' print the lexical file of probability based on word pairs count
+        '''
+        output_lex = handle_file("{0}{1}.{2}".format(path,"/lex",direction), 'open', mode='w')
+        if direction == "e2f":
+            word_pairs = self.word_pairs_e2f
+        else:
+            word_pairs = self.word_pair_f2e
+
+        for x in sorted(word_pairs):
+            all_x = sum(word_pairs[x].values())
+            for y in sorted(word_pairs[x]):
+                output_lex.write(b"%s %s %s\n" %(x,y,float(word_pairs[x][y])/all_x))
         handle_file("{0}{1}.{2}".format(path,"/lex",direction),'close',output_lex,mode='w')
 
 #merge the noisy phrase table
@@ -190,7 +235,7 @@ class Merge_TM():
         self.output_lexical = output_lexical
         self.action=action
         self.moses_interface=moses_interface
-        self.moses_interface._write_lexical_file(os.path.dirname(os.path.realpath(self.output_file)), "e2f")
+        self.moses_interface._write_lexical_prob(os.path.dirname(os.path.realpath(self.output_file)), "e2f")
 
     def _combine_TM(self,flag=False,prev_line=None):
         '''
@@ -315,6 +360,10 @@ class Merge_TM():
             line[2][2] = 0
         else:
             line[2][2] = coocc/count_s # p(t|s)
+        # lexical weight
+        #TODO: pay attention to the change from lex1 to lex2
+        line[2][1],line[2][3] = self.moses_interface._compute_lexical_weight(line[0],line[1],line[3])
+
         return line
 
     def _combine_occ(self,prev_line=None,cur_line=None):
