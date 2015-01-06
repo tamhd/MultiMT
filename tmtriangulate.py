@@ -147,9 +147,19 @@ class Moses:
 
     # when you read the alignment, save the count of word here, for example: e2f[src][tgt] = 4, f2e[tgt][src] = 3
 
-    def _print_lexical_file:
+    def _write_lexical_file(self,path,direction):
         ''' print the lexical file based on word pairs
         '''
+        output_lex = handle_file("{0}{1}.{2}".format(path,"/lex",direction), 'open', mode='w')
+        if direction == "e2f":
+            word_pairs = self.word_pairs_e2f
+        else:
+            word_pairs = self.word_pair_f2e
+
+        for x in sorted(word_pairs):
+            for y in sorted(word_pairs[x]):
+                output_e2f.write(b"%s %s %s\n" %(x,y,(self.word_pairs_e2f[x][y])))
+        handle_file("{0}{1}.{2}".format(path,"/lex",direction),'close',output_lex,mode='w')
 
 #merge the noisy phrase table
 class Merge_TM():
@@ -180,7 +190,8 @@ class Merge_TM():
         self.output_lexical = output_lexical
         self.action=action
         self.moses_interface=moses_interface
-
+        print self.moses_interface.word_pairs_e2f
+        self.moses_interface._write_lexical_file(os.path.dirname(os.path.realpath(self.output_file)), "e2f")
 
     def _combine_TM(self,flag=False,prev_line=None):
         '''
@@ -596,8 +607,6 @@ class Triangulate_TMs():
         in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
         After combining two phrase-table, print them right after it
         '''
-        #if (len(self.phrase_equal[1]) > 10 and len(self.phrase_equal[2]) > 10):
-            #print "Huge match: ", self.phrase_equal[1][0][0], len(self.phrase_equal[1]), len(self.phrase_equal[2])
         for phrase1 in self.phrase_equal[1]:
             for phrase2 in self.phrase_equal[2]:
                 if (phrase1[0] != phrase2[0]):
