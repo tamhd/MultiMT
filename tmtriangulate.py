@@ -139,11 +139,11 @@ class Moses:
     def __init__(self, number_of_features=4):
         self.number_of_features = number_of_features
 
-        self.word_pairs_e2f = defaultdict(lambda: defaultdict())
-        self.word_pairs_f2e = defaultdict(lambda:defaultdict())
+        self.word_pairs_e2f = defaultdict(lambda: defaultdict(long))
+        self.word_pairs_f2e = defaultdict(lambda:defaultdict(long))
 
-        self.phrase_count_e = defaultdict()
-        self.phrase_count_f = defaultdict()
+        self.phrase_count_e = defaultdict(long)
+        self.phrase_count_f = defaultdict(long)
 
     # when you read the alignment, save the count of word here, for example: e2f[src][tgt] = 4, f2e[tgt][src] = 3
 
@@ -158,7 +158,7 @@ class Moses:
 
         for x in sorted(word_pairs):
             for y in sorted(word_pairs[x]):
-                output_e2f.write(b"%s %s %s\n" %(x,y,(self.word_pairs_e2f[x][y])))
+                output_lex.write(b"%s %s %s\n" %(x,y,(word_pairs[x][y])))
         handle_file("{0}{1}.{2}".format(path,"/lex",direction),'close',output_lex,mode='w')
 
 #merge the noisy phrase table
@@ -190,7 +190,6 @@ class Merge_TM():
         self.output_lexical = output_lexical
         self.action=action
         self.moses_interface=moses_interface
-        print self.moses_interface.word_pairs_e2f
         self.moses_interface._write_lexical_file(os.path.dirname(os.path.realpath(self.output_file)), "e2f")
 
     def _combine_TM(self,flag=False,prev_line=None):
@@ -624,7 +623,6 @@ class Triangulate_TMs():
                 outline = _write_phrasetable_file([src,tgt,features,word_alignments,word_counts])
                 output_object.write(outline)
                 self._update_moses(src,tgt,word_alignments,word_counts)
-
         # reset the memory
         self.phrase_equal = None
         self.phrase_equal = defaultdict(lambda: []*3)
@@ -646,7 +644,6 @@ class Triangulate_TMs():
 
         srcphrase = src.split(b' ')
         tgtphrase = tgt.split(b' ')
-
         for src_id, tgt_lst in word_alignments.iteritems():
             for tgt_id in tgt_lst:
                 self.moses_interface.word_pairs_e2f[srcphrase[src_id]][tgtphrase[tgt_id]] += word_counts[2]
@@ -667,25 +664,10 @@ class Triangulate_TMs():
         return phrase_features
 
 
-    def _get_word_alignments(self,src,target,align1,align2):
+    def _get_word_alignments(self,src,target,phrase_ps,phrase_pt):
         """from the Moses phrase table alignment info in the form "0-0 1-0",
            get the aligned word pairs / NULL alignments
         """
-        phrase_ps = defaultdict(lambda: [])
-        phrase_pt = defaultdict(lambda: [])
-        # fill value to the phrase_align
-        try:
-            for pair in align1.split(b' '):
-                p,s = pair.split(b'-')
-                p,s = int(p),int(s)
-                phrase_ps[p].append(s)
-            for pair in align2.split(b' '):
-                p,t = pair.split(b'-')
-                p,t = int(p),int(t)
-                phrase_pt[p].append(t)
-        except:
-            pass
-
         # 20150104: fix the alignment error
         phrase_st = defaultdict(lambda: []*3)
         for pvt_id, src_lst in phrase_ps.iteritems():
