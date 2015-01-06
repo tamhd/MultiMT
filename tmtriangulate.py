@@ -140,7 +140,7 @@ class Moses:
         self.number_of_features = number_of_features
 
         self.word_pairs_e2f = defaultdict(lambda: defaultdict())
-        self.word_pair_f2e = defaultdict(lambda:defaultdict())
+        self.word_pairs_f2e = defaultdict(lambda:defaultdict())
 
         self.phrase_count_e = defaultdict()
         self.phrase_count_f = defaultdict()
@@ -224,7 +224,7 @@ class Merge_TM():
                     continue
                 else:
                 # when you get out of the identical blog, print your previous sentence
-                    outline = self._write_phrasetable_file(prev_line)
+                    outline = _write_phrasetable_file(prev_line)
                     output_object.write(outline)
                     prev_line = line
                     flag = False
@@ -236,14 +236,14 @@ class Merge_TM():
                     flag = True
                     continue
                 else:
-                    outline = self._write_phrasetable_file(prev_line)
+                    outline = _write_phrasetable_file(prev_line)
                     output_object.write(outline)
                     prev_line = line
             else:
                 # the first position
                 prev_line = line
         if (prev_line):
-            outline = self._write_phrasetable_file(prev_line)
+            outline = _write_phrasetable_file(prev_line)
             output_object.write(outline)
         sys.stderr.write("Done\n")
 
@@ -260,8 +260,8 @@ class Merge_TM():
             count+=1
 
             line = _load_line(line)
-            line[4][0] = self.occurrences[1][line[1]] # target
-            line[4][1] = self.occurrences[0][line[0]] # source
+            line[4][0] = self.moses_interface.phrase_count_f[line[1]] # target
+            line[4][1] = self.moses_interface.phrase_count_e[line[0]] # source
             if (prev_line):
                 if (line[0] == prev_line[0] and line[1] == prev_line[1]):
                     # combine current sentence to previous sentence, return previous sentence
@@ -271,7 +271,7 @@ class Merge_TM():
                 else:
                     # when you get out of the identical blog, print your previous sentence
                     prev_line = self._recompute_occ(prev_line)
-                    outline = self._write_phrasetable_file(prev_line)
+                    outline = _write_phrasetable_file(prev_line)
                     output_object.write(outline)
                     prev_line = line
                     flag = False
@@ -279,7 +279,7 @@ class Merge_TM():
                 # the first position
                 prev_line = line
         if (prev_line):
-            outline = self._write_phrasetable_file(prev_line)
+            outline = _write_phrasetable_file(prev_line)
             output_object.write(outline)
         sys.stderr.write("Done\n")
 
@@ -289,11 +289,8 @@ class Merge_TM():
         format: src ||| tgt ||| prob1 lex1 prob2 lex2 ||| align ||| c_t c_s c_s_t ||| |||
         '''
         coocc = line[4][2]
-        count_s = self.occurrences[0][line[0]]
-        count_t = self.occurrences[1][line[1]]
-        if (count_s != line[4][1] or count_t != line[4][0]):
-            sys.exit(1)
-        # src and tgt are the same
+        count_s = line[4][1]
+        count_t = line[4][0]
 
         # probability
         if (coocc == 0 and count_t == 0):
@@ -320,8 +317,8 @@ class Merge_TM():
                 if (tgt not in prev_line[3][src]):
                     prev_line[3][src].append(tgt)
         # count
-        prev_line[4][0] = self.occurrences[1][prev_line[1]] # target
-        prev_line[4][1] = self.occurrences[0][prev_line[0]] # source
+        prev_line[4][0] = self.moses_interface.phrase_count_f[prev_line[1]] # target
+        prev_line[4][1] = self.moses_interface.phrase_count_e[prev_line[0]] # source
         prev_line[4][2] += cur_line[4][2]
         return prev_line
 
@@ -533,7 +530,7 @@ class Triangulate_TMs():
                     tmp = line[4][0]
                     line[4][0] = line[4][1]
                     line[4][1] = tmp
-                outline = self._write_phrasetable_file(line[0], line[1], features, phrase_align, line[4])
+                outline = _write_phrasetable_file(line[0], line[1], features, phrase_align, line[4])
                 output_contr.write(outline)
             handle_file(outfile,'close',output_contr,mode='w')
             tmpfile = sort_file(outfile.name,tempdir=self.tempdir)
@@ -849,9 +846,6 @@ def _write_phrasetable_file(line):
     # convert data to appropriate format
     # probability
     src,tgt,features,alignment,word_counts = line[:5]
-    #if (self.action == "compute_by_occurrences"):
-    #    word_counts[0] = self.occurrences[1][tgt]
-    #    word_counts[1] = self.occurrences[0][src]
     features = b' '.join([b'%.6g' %(f) for f in features])
 
     alignments = []
