@@ -180,7 +180,7 @@ class Moses:
     def _write_lexical_count(self,path,direction):
         ''' print the lexical file based on word pairs count
         '''
-        output_lex = handle_file("{0}{1}.{2}".format(path,"/lex",direction), 'open', mode='w')
+        output_lex = handle_file("{0}{1}.{2}".format(path,"/lex.count",direction), 'open', mode='w')
         if direction == "e2f":
             word_pairs = self.word_pairs_e2f
         else:
@@ -191,10 +191,10 @@ class Moses:
                 output_lex.write(b"%s %s %s\n" %(x,y,(word_pairs[x][y])))
         handle_file("{0}{1}.{2}".format(path,"/lex",direction),'close',output_lex,mode='w')
 
-    def _write_lexical_prob(self,path,direction):
+    def _write_lexical_prob(self,path,bridge,direction):
         ''' print the lexical file of probability based on word pairs count
         '''
-        output_lex = handle_file("{0}{1}.{2}".format(path,"/lex",direction), 'open', mode='w')
+        output_lex = handle_file("{0}{1}.{2}".format(path,bridge,direction), 'open', mode='w')
         if direction == "e2f":
             word_pairs = self.word_pairs_e2f
         else:
@@ -236,8 +236,11 @@ class Merge_TM():
         self.action=action
         self.moses_interface=moses_interface
         sys.stderr.write("\nWrite the lexical files")
-        self.moses_interface._write_lexical_prob(os.path.dirname(os.path.realpath(self.output_file)), "e2f")
-        self.moses_interface._write_lexical_prob(os.path.dirname(os.path.realpath(self.output_file)), "f2e")
+
+        # get the decoding
+        bridge = os.path.basename(self.output_file).replace("phrase-table","/lex").replace(".gz", "") # create the lexical associated with phrase table
+        self.moses_interface._write_lexical_prob(os.path.dirname(os.path.realpath(self.output_file)), bridge, "e2f")
+        self.moses_interface._write_lexical_prob(os.path.dirname(os.path.realpath(self.output_file)), bridge, "f2e")
 
 
     def _combine_TM(self,flag=False,prev_line=None):
