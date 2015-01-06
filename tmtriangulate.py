@@ -184,7 +184,7 @@ class Moses:
         if direction == "e2f":
             word_pairs = self.word_pairs_e2f
         else:
-            word_pairs = self.word_pair_f2e
+            word_pairs = self.word_pairs_f2e
 
         for x in sorted(word_pairs):
             for y in sorted(word_pairs[x]):
@@ -198,12 +198,12 @@ class Moses:
         if direction == "e2f":
             word_pairs = self.word_pairs_e2f
         else:
-            word_pairs = self.word_pair_f2e
+            word_pairs = self.word_pairs_f2e
 
         for x in sorted(word_pairs):
             all_x = sum(word_pairs[x].values())
             for y in sorted(word_pairs[x]):
-                output_lex.write(b"%s %s %s\n" %(x,y,float(word_pairs[x][y])/all_x))
+                output_lex.write(b"%s %s %.6f\n" %(x,y,float(word_pairs[x][y])/all_x))
         handle_file("{0}{1}.{2}".format(path,"/lex",direction),'close',output_lex,mode='w')
 
 #merge the noisy phrase table
@@ -235,7 +235,10 @@ class Merge_TM():
         self.output_lexical = output_lexical
         self.action=action
         self.moses_interface=moses_interface
+        sys.stderr.write("\nWrite the lexical files")
         self.moses_interface._write_lexical_prob(os.path.dirname(os.path.realpath(self.output_file)), "e2f")
+        self.moses_interface._write_lexical_prob(os.path.dirname(os.path.realpath(self.output_file)), "f2e")
+
 
     def _combine_TM(self,flag=False,prev_line=None):
         '''
@@ -371,9 +374,9 @@ class Merge_TM():
         Calculate the value of combine occ by the co-occurrence
         rather than the probabilities
         '''
-        # probability
-        for i in range(4):
-            prev_line[2][i] += cur_line[2][i]
+        # probability is not necessary
+        #for i in range(4):
+        #    prev_line[2][i] += cur_line[2][i]
         # alignment
         for src,key in cur_line[3].iteritems():
             for tgt in key:
