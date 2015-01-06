@@ -147,6 +147,10 @@ class Moses:
 
     # when you read the alignment, save the count of word here, for example: e2f[src][tgt] = 4, f2e[tgt][src] = 3
 
+    def _print_lexical_file:
+        ''' print the lexical file based on word pairs
+        '''
+
 #merge the noisy phrase table
 class Merge_TM():
     """This class take input as one noisy phrase table in which it consists of so many repeated lines.
