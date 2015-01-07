@@ -175,7 +175,29 @@ class Moses:
 
         return lexical_weight_st, lexical_weight_ts
 
-    # when you read the alignment, save the count of word here, for example: e2f[src][tgt] = 4, f2e[tgt][src] = 3
+
+
+
+    #TODO: write the general lexical functions (both probability and count) instead of two functions
+    def _get_lexical(self,path,bridge,direction):
+        ''' write the  lexical file
+            named after: LexicalTranslationModel.pm->get_lexical
+        '''
+        output_lex_prob = handle_file("{0}{1}.{2}".format(path,bridge,direction), 'open', mode='w')
+        output_lex_count = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",direction), 'open', mode='w')
+
+        if direction == "e2f":
+            word_pairs = self.word_pairs_e2f
+        else:
+            word_pairs = self.word_pairs_f2e
+
+        for x in sorted(word_pairs):
+            all_x = sum(word_pairs[x].values())
+            for y in sorted(word_pairs[x]):
+                output_lex_count.write("%s %s %i %i\n" %(x,y,word_pairs[x][y],all_x))
+                output_lex_prob.write(b"%s %s %.7f\n" %(x,y,float(word_pairs[x][y])/all_x))
+        handle_file("{0}{1}.{2}".format(path,bridge,direction),'close',output_lex_prob,mode='w')
+        handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",direction),'close',output_lex_count,mode='w')
 
     def _write_lexical_count(self,path,direction):
         ''' print the lexical file based on word pairs count
@@ -203,8 +225,8 @@ class Moses:
         for x in sorted(word_pairs):
             all_x = sum(word_pairs[x].values())
             for y in sorted(word_pairs[x]):
-                output_lex.write(b"%s %s %.6f\n" %(x,y,float(word_pairs[x][y])/all_x))
-        handle_file("{0}{1}.{2}".format(path,"/lex",direction),'close',output_lex,mode='w')
+                output_lex.write(b"%s %s %.7f\n" %(x,y,float(word_pairs[x][y])/all_x))
+        handle_file("{0}{1}.{2}".format(path,bridge,direction),'close',output_lex,mode='w')
 
 #merge the noisy phrase table
 class Merge_TM():
