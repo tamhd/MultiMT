@@ -313,7 +313,7 @@ class Merge_TM():
         # keep the prev_line in memory until it break prev_line[0]
         reserve_lines = []
         sort_src = 0
-        oo1=handle_file(os.path.normpath('/'.join([args.tempdir2,'target_priority']),'open',mode='w')
+        oo1=handle_file(os.path.normpath('/'.join([args.tempdir2,'target_priority'])),'open',mode='w')
         for line in self.model:
             # print counting lines
             if not count%100000:
@@ -357,7 +357,7 @@ class Merge_TM():
                outline = _write_phrasetable_file(keep_line)
                oo1.write(outline)
         sys.stderr.write("Done\n")
-        handle_file(os.path.normpath('/'.join([args.tempdir2,'target_priority']),'close',oo1,mode='w')
+        handle_file(os.path.normpath('/'.join([args.tempdir2,'target_priority'])),'close',oo1,mode='w')
         tgt_priority_file = sort_file(combiner.output_file,tempdir=self.tempdir)
 
         ''' traverse the second time when file is sorted by target
@@ -708,10 +708,10 @@ class Triangulate_TMs():
 
         srcphrase = src.split(b' ')
         tgtphrase = tgt.split(b' ')
-        for src_id, tgt_lst in word_alignments.iteritems():
-            for tgt_id in tgt_lst:
-                self.moses_interface.word_pairs_e2f[srcphrase[src_id]][tgtphrase[tgt_id]] += word_counts[2]
-                self.moses_interface.word_pairs_f2e[tgtphrase[tgt_id]][srcphrase[src_id]] += word_counts[2]
+        for align in word_alignments:
+            src_id,tgt_id=align
+            self.moses_interface.word_pairs_e2f[srcphrase[src_id]][tgtphrase[tgt_id]] += word_counts[2]
+            self.moses_interface.word_pairs_f2e[tgtphrase[tgt_id]][srcphrase[src_id]] += word_counts[2]
 
         return None
 
@@ -733,7 +733,13 @@ class Triangulate_TMs():
            get the aligned word pairs / NULL alignments
         """
         # 20150104: fix the alignment error
-        return list(set(phrase_ps + phrase_pt))
+        phrase_st = []
+        print phrase_ps, phrase_pt
+        for pvt_src in phrase_ps:
+            for pvt_tgt in phrase_pt:
+                if (pvt_src[0] == pvt_tgt[0]):
+                    phrase_st.append([pvt_src[1],pvt_tgt[1]])
+        return phrase_st
 
 
     def _get_word_counts(self,src,target,count1,count2):
@@ -873,15 +879,11 @@ def _load_line(line):
 
     # break the alignment
     #TODO: Keep the alignment structure: [(1,1),(1,3),(2,3)]
-    phrase_align = [lambda:[]]
+    phrase_align = []
     for pair in line[3].strip().split(b' '):
-        try:
-            s,t = pair.split(b'-')
-            s,t = int(s),int(t)
-            phrase_align.append([s,t])
-        except:
-            #print "Infeasible pair ", pair
-            pass
+        s,t = pair.split(b'-')
+        s,t = int(s),int(t)
+        phrase_align.append([s,t])
     line[3] = phrase_align
     # break the count [12 12 1]
     #TODO: Think about the way to remove the first two values
@@ -900,14 +902,13 @@ def _write_phrasetable_file(line):
     src,tgt,features,alignment,word_counts = line[:5]
     features = b' '.join([b'%.6g' %(f) for f in features])
 
-    alignments = []
-    for src_id,tgt_id_list in alignment.iteritems():
-        for tgt_id in sorted(tgt_id_list):
-            alignments.append(str(src_id) + '-' + str(tgt_id))
     extra_space = b''
-    if(len(alignments)):
+    if(len(alignment)):
         extra_space = b' '
-    alignments = b' '.join(str(x) for x in alignments)
+    alignments = []
+    for f in alignment:
+        alignments.append(b"%i-%i" %(f[0],f[1]))
+    alignments = b' '.join(alignments)
 
     word_counts = b' '.join([b'%.6g' %(f) for f in word_counts])
 
