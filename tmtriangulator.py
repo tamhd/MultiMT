@@ -143,8 +143,11 @@ class Moses:
         self.word_pairs_e2f = defaultdict(lambda: defaultdict(long))
         self.word_pairs_f2e = defaultdict(lambda:defaultdict(long))
 
-        self.phrase_count_e = defaultdict(long)
-        self.phrase_count_f = defaultdict(long)
+        # name of files
+        self.phrase_count_e2f = 'phrase.count.e2f' # s ||| t ||| count_s_t
+        self.phrase_count_f2e = 'phrase.count.f2e' # t ||| s ||| count_s_t
+        self.phrase_align = 'phrase.align.e2f'     # s ||| t ||| align
+        self.phrase_prob = 'phrase.probabilities'
 
     def _compute_lexical_weight(self,src,tgt,alignment):
         '''
@@ -525,10 +528,14 @@ class Triangulate_TMs():
         # preparation for multiple output_object
         output_object = handle_file(self.output_file,'open',mode='w')
 
+        output_phrase_count_e2f=os.path.normpath('/'.join(self.temdir, 'phrase.count.e2f'))
+        outputpc_e2f = handle_file(output_phrase_count_e2f, 'open', mode='w')
+        outputpc_f2e = handle_file(output_phrase_count_f2e, 'open', mode='w')
 
-        self._write_phrasetable(model1, model2, output_object)
+        self._write_phrasetable(model1, model2, output_object, outputpc_e2f, outputpc_f2e)
 
-
+        handle_file(output_phrase_count_f2e,'close',outputpc_f2e,mode='w')
+        handle_file(output_phrase_count_e2f,'close',outputpc_e2f,mode='w')
         handle_file(self.output_file,'close',output_object,mode='w')
 
     def _ensure_inverted(self, model1, model2):
@@ -627,7 +634,7 @@ class Triangulate_TMs():
                 elif (line1[0] > line2[0]):
                     line2 = _load_line(model2[0].readline())
 
-    def _combine_and_write(self,output_object):
+    def _combine_and_write(self,output_object,outputpc_e2f,outputpc_f2e):
         ''' Follow Cohn at el.2007
         The conditional over the source-target pair is: p(s|t) = sum_i p(s|i,t)p(i|t) = sum_i p(s|i)p(i|t)
         in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
@@ -642,11 +649,10 @@ class Triangulate_TMs():
                 features = self._get_features_Cohn(src, tgt, phrase1[2], phrase2[2])
                 word_alignments = self._get_word_alignments(src, tgt, phrase1[3], phrase2[3])
                 word_counts = self._get_word_counts(src, tgt, phrase1[4], phrase2[4])
-                #outline = _write_phrasetable_file([src,tgt,features,word_alignments,word_counts])
-                #output_object.write(outline)
-
-                #TODO: write specific temp file instead of one big file
-
+                outline = _write_phrasetable_file([src,tgt,features,word_alignments,word_counts])
+                output_object.write(outline)
+                outputpc_e2f.write("%s ||| %s ||| %i" %(src,tgt,word_counts[2]))
+                outputpc_f2e.write("%s ||| %s ||| %i" %(tgt,src,word_counts[2]))
                 self._update_moses(src,tgt,word_alignments,word_counts)
         # reset the memory
         self.phrase_match = None
