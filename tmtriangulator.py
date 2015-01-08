@@ -286,17 +286,17 @@ class Merge_TM():
 
         # define the action
         if (self.action == 'combine_given_weights'):
-            self._line_traversal = self._regular_traversal
+            self._line_traversal = self._dual_traversal
             self._combine_lines = self._combine_sum
         elif (self.action == 'maximize_given_weights'):
-            self._line_traversal = self._regular_traversal
+            self._line_traversal = self._dual_traversal
             self._combine_lines = self._combine_max
         elif (self.action == 'compute_by_occurrences'):
-            self._line_traversal = self._normalized_traversal
+            self._line_traversal = self._dual_traversal
             self._combine_lines = self._combine_occ
         else:
             # by default, let say we take the sum
-            self._line_traversal = self._normalized_traversal
+            self._line_traversal = self._dual_traversal
             self._combine_lines = self._combine_occ
         self._line_traversal(flag,prev_line,output_object)
         handle_file(self.output_file,'close',output_object,mode='w')
@@ -314,17 +314,18 @@ class Merge_TM():
             count+=1
 
             line = _load_line(line)
-            phrase_count_f = phrase_count_f.strip().split(b' ||| ')
+            phrase_count = phrase_count.strip().split(b' ||| ')
 
-            if (line[0] != phrase_count_f[0] or line[1] != phrase_count_f[1]):
+            if (line[0] != phrase_count[0] or line[1] != phrase_count[1]):
                 sys.exit("Mismatch between phrase table and count table")
             else:
-                line[4][0] = long(phrase_count_f[2])
+                line[4][0] = long(phrase_count[2])
 
             if (prev_line):
                 if (line[0] == prev_line[0] and line[1] == prev_line[1]):
                     # combine current sentence to previous sentence, return previous sentence
                     prev_line = self._combine_lines(prev_line, line)
+                    count_src += line[4][2]
                     continue
                 else:
                     # when you get out of the identical blog, start writing
@@ -389,7 +390,6 @@ class Merge_TM():
         for pair in prev_line[3]+cur_line[3]:
             if (pair not in alignment):
                 alignment.append(pair)
-
         prev_line[3] = alignment
         # count
         prev_line[4][2] += cur_line[4][2]
