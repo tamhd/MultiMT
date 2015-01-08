@@ -209,7 +209,6 @@ class Moses:
         sys.stderr.write("\nRead the phrase count  ")
         outsrc_file = "{0}/{1}.{2}".format(tempdir,"lexical_count","e")
         outsrc = handle_file(outsrc_file, 'open', mode='w')
-        print self.phrase_count
         if (not self.phrase_count): # do nothing for nothing
             sys.stderr.write("The phrase count is empty\n")
             return None
@@ -283,21 +282,22 @@ class Merge_TM():
         sys.stderr.write("\nCombine Multiple lines by option: " + self.action + "\n")
         output_object = handle_file(self.output_file,'open',mode='w')
         sys.stderr.write("Start merging multiple lines ...")
+        self._line_traversal = self._dual_traversal
 
         # define the action
         if (self.action == 'combine_given_weights'):
-            self._line_traversal = self._dual_traversal
             self._combine_lines = self._combine_sum
+            self._recompute_features = self._recompute_features_Cohn
         elif (self.action == 'maximize_given_weights'):
-            self._line_traversal = self._dual_traversal
             self._combine_lines = self._combine_max
+            self._recompute_features = self._recompute_features_Cohn
         elif (self.action == 'compute_by_occurrences'):
-            self._line_traversal = self._dual_traversal
             self._combine_lines = self._combine_occ
+            self._recompute_features = self._recompute_features_occ
         else:
-            # by default, let say we take the sum
-            self._line_traversal = self._dual_traversal
+            # by default, let say we take the cooccurrences and min
             self._combine_lines = self._combine_occ
+            self._recompute_features = self._recompute_features_occ
         self._line_traversal(flag,prev_line,output_object)
         handle_file(self.output_file,'close',output_object,mode='w')
 
@@ -354,8 +354,12 @@ class Merge_TM():
                ouput_object.write(outline)
         sys.stderr.write("Done\n")
 
+    def _recompute_features_Cohn(self,line):
+        ''' Do nothing :)
+        '''
+        return line
 
-    def _recompute_features(self,line):
+    def _recompute_features_occ(self,line):
         '''
         Compute the value of a single according to the co-occurrence
         format: src ||| tgt ||| prob1 lex1 prob2 lex2 ||| align ||| c_t c_s c_s_t ||| |||
@@ -405,7 +409,11 @@ class Merge_TM():
         for i in range(4):
             prev_line[2][i] += cur_line[2][i]
         # alignment
-        prev_line[3] = list(set(prev_line[3] + line[3]))
+        alignment = []
+        for pair in prev_line[3]+cur_line[3]:
+            if (pair not in alignment):
+                alignment.append(pair)
+        prev_line[3] = alignment
         # count
         if (cur_line[4][0] != prev_line[4][0] or cur_line[4][1] != prev_line[4][1]):
             sys.exit("The numbers of current line and prev line are not the same")
@@ -421,9 +429,14 @@ class Merge_TM():
         '''
         # probability
         for i in range(4):
-            prev_line[2][i] = max(prev_line[2], cur_line[2][i])
+            prev_line[2][i] = max(prev_line[2][i], cur_line[2][i])
         # alignment
-        prev_line[3] = list(set(prev_line[3] + line[3]))
+        alignment = []
+        for pair in prev_line[3]+cur_line[3]:
+            if (pair not in alignment):
+                alignment.append(pair)
+        prev_line[3] = alignment
+
         # count
         if (cur_line[4][0] != prev_line[4][0] or cur_line[4][1] != prev_line[4][1]):
             sys.exit("Incorrect numbers of counts")
@@ -648,7 +661,7 @@ class Triangulate_TMs():
                     sys.exit("the pivot phrases are different")
                 src, tgt = phrase1[1], phrase2[1]
 
-                features = self._get_features_Cohn(src, tgt, phrase1[2], phrase2[2])
+                features = self._get_features(src, tgt, phrase1[2], phrase2[2])
                 word_alignments = self._get_word_alignments(src, tgt, phrase1[3], phrase2[3])
                 word_counts = self._get_word_counts(src, tgt, phrase1[4], phrase2[4])
                 outline = _write_phrasetable_file([src,tgt,features,word_alignments,word_counts])
@@ -686,6 +699,15 @@ class Triangulate_TMs():
 
         return phrase_features
 
+    def _get_features_None(self,src,target,feature1,feature2):
+        """from the Moses phrase table probability, get the new probability
+           TODO: the phrase penalty value?
+        """
+        phrase_features =  [0]*4
+
+        return phrase_features
+
+
 
     def _get_word_alignments(self,src,target,phrase_ps,phrase_pt):
         """from the Moses phrase table alignment info in the form "0-0 1-0",
@@ -718,7 +740,10 @@ class Triangulate_TMs():
         store_flag = 'all'
         if self.mode == 'interpolate' and not self.flags['normalized']:
             store_flag = 'pairs'
-
+        if self.action == 'compute_by_occurrences':
+            self._get_features = self._get_features_None
+        else:
+            self._get_features = self._get_features_Cohn
         sys.stderr.write('Incrementally loading and processing phrase tables...')
         # Start process phrase table
         self.phrase_match = defaultdict(lambda: []*3)
