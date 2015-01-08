@@ -146,7 +146,7 @@ class Moses:
         self.phrase_count_e = defaultdict(long)
         self.phrase_count_f = defaultdict(long)
 
-    def _compute_lexical_weight(self,src,tgt,alignment):
+    def _compute_lexical_weight(self,src,tgt,alignments):
         '''
         compute the lexical weight in phrase table based on the co-occurrence of word count
         '''
@@ -157,6 +157,9 @@ class Moses:
         phrase_tgt = tgt.split(b' ')
         # lexical (s|t)
         lexical_weight_st = 1
+        alignment=defaultdict(lambda:[])
+        for src_id,tgt_id in alignments:
+            alignment[src_id].append(tgt_id)
         for src_id,tgt_lst in alignment.iteritems():
             count_s = sum(word_pairs[phrase_src[src_id]].values())
             count_s_t = []
@@ -192,7 +195,7 @@ class Moses:
         for x in sorted(word_pairs):
             all_x = sum(word_pairs[x].values())
             for y in sorted(word_pairs[x]):
-                output_lex_count.write("%s %s %i %i\n" %(x,y,word_pairs[x][y],all_x))
+                output_lex_count.write(b"%s %s %d %d\n" %(x,y,word_pairs[x][y],all_x))
                 output_lex_prob.write(b"%s %s %.7f\n" %(x,y,float(word_pairs[x][y])/all_x))
         handle_file("{0}{1}.{2}".format(path,bridge,direction),'close',output_lex_prob,mode='w')
         handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",direction),'close',output_lex_count,mode='w')
@@ -214,7 +217,8 @@ class Merge_TM():
                       lang_target=None,
                       output_lexical=None,
                       action="compute_by_occurrences",
-                      moses_interface=None
+                      moses_interface=None,
+                      tempdir=None
                       ):
 
         self.mode = mode
@@ -227,6 +231,7 @@ class Merge_TM():
         self.action=action
         self.moses_interface=moses_interface
         sys.stderr.write("\nWrite the lexical files")
+        self.tempdir=tempdir
 
         # get the decoding
         bridge = os.path.basename(self.output_file).replace("phrase-table","/lex").replace(".gz", "") # create the lexical associated with phrase table
@@ -358,13 +363,15 @@ class Merge_TM():
                oo1.write(outline)
         sys.stderr.write("Done\n")
         handle_file(os.path.normpath('/'.join([args.tempdir2,'target_priority'])),'close',oo1,mode='w')
+
         tgt_priority_file = sort_file(combiner.output_file,tempdir=self.tempdir)
 
         ''' traverse the second time when file is sorted by target
         '''
-        sort_tgt,reserve_lines,prev_line=0,[],None
+        count,sort_tgt,reserve_lines,prev_line=0,0,[],None
         sys.stderr.write("Traverse the second time ...")
         for line in tgt_priority_file:
+            print line
             # print counting lines
             if not count%100000:
                 sys.stderr.write(str(count)+'...')
@@ -433,7 +440,12 @@ class Merge_TM():
         rather than the probabilities
         '''
         # alignment
-        prev_line[3] = list(set(prev_line[3] + line[3]))
+        alignment = []
+        for pair in prev_line[3]+cur_line[3]:
+            if (pair not in alignment):
+                alignment.append(pair)
+
+        prev_line[3] = alignment
         # count
         prev_line[4][2] += cur_line[4][2]
         return prev_line
@@ -734,7 +746,6 @@ class Triangulate_TMs():
         """
         # 20150104: fix the alignment error
         phrase_st = []
-        print phrase_ps, phrase_pt
         for pvt_src in phrase_ps:
             for pvt_tgt in phrase_pt:
                 if (pvt_src[0] == pvt_tgt[0]):
@@ -881,9 +892,12 @@ def _load_line(line):
     #TODO: Keep the alignment structure: [(1,1),(1,3),(2,3)]
     phrase_align = []
     for pair in line[3].strip().split(b' '):
-        s,t = pair.split(b'-')
-        s,t = int(s),int(t)
-        phrase_align.append([s,t])
+        try:
+            s,t = pair.split(b'-')
+            s,t = int(s),int(t)
+            phrase_align.append([s,t])
+        except:
+            pass
     line[3] = phrase_align
     # break the count [12 12 1]
     #TODO: Think about the way to remove the first two values
@@ -958,5 +972,6 @@ if __name__ == "__main__":
                           output_file=args.output,
                           mode=combiner.mode,
                           action=args.action,
-                          moses_interface=combiner.moses_interface)
+                          moses_interface=combiner.moses_interface,
+                          tempdir=args.tempdir2)
         merger._combine_TM()
