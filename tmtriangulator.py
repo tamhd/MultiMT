@@ -143,8 +143,10 @@ class Moses:
         self.word_pairs_e2f = defaultdict(lambda: defaultdict(long))
         self.word_pairs_f2e = defaultdict(lambda:defaultdict(long))
 
-        self.phrase_count_e = defaultdict(long)
-        self.phrase_count_f = defaultdict(long)
+        self.word_count_e = defaultdict(long)
+        self.word_count_f = defaultdict(long)
+
+        self.phrase_count = None # name of the file with format tgt ||| src ||| count (sorted by tgt)
 
     def _compute_lexical_weight(self,src,tgt,alignments):
         '''
@@ -200,6 +202,36 @@ class Moses:
         handle_file("{0}{1}.{2}".format(path,bridge,direction),'close',output_lex_prob,mode='w')
         handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",direction),'close',output_lex_count,mode='w')
 
+    def _process_lexical_count(self,tempdir=None):
+        ''' compute the count of target phrase, then write them down in format: src ||| tgt ||| count
+            then sort the new file
+        '''
+        sys.stderr.write("\nRead the phrase count  ")
+        outsrc_file = "{0}/{1}.{2}".format(tempdir,"lexical_count","e")
+        outsrc = handle_file(outsrc_file, 'open', mode='w')
+        print self.phrase_count
+        if (not self.phrase_count): # do nothing for nothing
+            sys.stderr.write("The phrase count is empty\n")
+            return None
+        count_tgt,key_tgt,reserve_lines = 0,None,[]
+        for line in self.phrase_count:
+            line = line.strip().split(b' ||| ')
+            if (key_tgt and key_tgt != line[0]):
+                for l in reserve_lines:
+                    outsrc.write(b"%s ||| %s ||| %i\n" %(l[1],l[0],count_tgt))
+                reserve_lines,count_tgt = [],0
+            count_tgt += int(line[2])
+            key_tgt=line[0]
+            reserve_lines.append(line[:3])
+        if (count_tgt):
+            for l in reserve_lines:
+                outsrc.write(b"%s ||| %s ||| %i\n" %(l[1],l[0],count_tgt))
+        handle_file(outsrc_file, 'close', outsrc, mode='w')
+
+        # sort the lexical count by source
+        src_sort_file = sort_file(outsrc_file,tempdir=tempdir)
+        return src_sort_file
+
 #merge the noisy phrase table
 class Merge_TM():
     """This class take input as one noisy phrase table in which it consists of so many repeated lines.
@@ -238,6 +270,9 @@ class Merge_TM():
         self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge, "e2f")
         self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge, "f2e")
 
+        # handle the phrase count
+        self.phrase_count_f = self.moses_interface._process_lexical_count(tempdir=self.tempdir)
+
 
     def _combine_TM(self,flag=False,prev_line=None):
         '''
@@ -266,156 +301,65 @@ class Merge_TM():
         self._line_traversal(flag,prev_line,output_object)
         handle_file(self.output_file,'close',output_object,mode='w')
 
-    def _regular_traversal(self,flag=False,prev_line=None,output_object=None):
-        ''' Traver through the phrase-table by old way, previous line is the new line
-        '''
-        count = 0
-        for line in self.model:
-            # print counting lines
-            if not count%100000:
-                sys.stderr.write(str(count)+'...')
-            count+=1
-
-            line = _load_line(line)
-            if (flag):
-                if (line[0] == prev_line[0] and line[1] == prev_line[1]):
-                    # combine current sentence to previous sentence, return previous sentence
-                    prev_line = self._combine_lines(prev_line, line)
-                    continue
-                else:
-                # when you get out of the identical blog, print your previous sentence
-                    outline = _write_phrasetable_file(prev_line)
-                    output_object.write(outline)
-                    prev_line = line
-                    flag = False
-
-            elif (prev_line):
-                if (line[0] == prev_line[0] and line[1] == prev_line[1]):
-                # if you see a second sentence in a block, turn flag to True and combine
-                    prev_line = self._combine_lines(prev_line, line)
-                    flag = True
-                    continue
-                else:
-                    outline = _write_phrasetable_file(prev_line)
-                    output_object.write(outline)
-                    prev_line = line
-            else:
-                # the first position
-                prev_line = line
-        if (prev_line):
-            outline = _write_phrasetable_file(prev_line)
-            output_object.write(outline)
-        sys.stderr.write("Done\n")
-
-        return None
-
-    def _normalized_traversal(self,flag=False,prev_line=None,output_object=None):
-        ''' Traver through the phrase-table to re-compute the phrase by co-occurrences
+    def _dual_traversal(self,flag=False,prev_line=None,output_object=None):
+        ''' Traver through the phrase-table and the phrase compact file to compute the final file
         '''
         count = 0
 
-        # Traverse the file twice to fully compute the value
         # keep the prev_line in memory until it break prev_line[0]
-        reserve_lines = []
-        sort_src = 0
-        oo1=handle_file(os.path.normpath('/'.join([args.tempdir2,'target_priority'])),'open',mode='w')
-        for line in self.model:
-            # print counting lines
+        reserve_lines,count_src= [],0
+        for line,phrase_count in zip(self.model,self.phrase_count_f):
             if not count%100000:
                 sys.stderr.write(str(count)+'...')
             count+=1
 
             line = _load_line(line)
+            phrase_count_f = phrase_count_f.strip().split(b' ||| ')
+
+            if (line[0] != phrase_count_f[0] or line[1] != phrase_count_f[1]):
+                sys.exit("Mismatch between phrase table and count table")
+            else:
+                line[4][0] = long(phrase_count_f[2])
+
             if (prev_line):
                 if (line[0] == prev_line[0] and line[1] == prev_line[1]):
                     # combine current sentence to previous sentence, return previous sentence
                     prev_line = self._combine_lines(prev_line, line)
-                    flag = True
                     continue
                 else:
-                    # when you get out of the identical blog, print your previous sentence
-                    prev_line = self._recompute_occ(prev_line)
+                    # when you get out of the identical blog, start writing
                     reserve_lines.append(prev_line)
                     prev_line = line
 
-                    # print the line if it escapes block of sort_src
+                    # write the line if it escapes block of count_src
                     # otherwise just increase count
                     if (line[0] == reserve_lines[0][0]):
-                        sort_src += line[4][2]
+                        count_src += line[4][2]
                     else:
                         for keep_line in reserve_lines:
-                            keep_line[4][1] = sort_src
-                            keep_line[0],keep_line[1] = keep_line[1],keep_line[0]
+                            keep_line[4][1] = count_src
+                            keep_line = self._recompute_features(keep_line)
                             outline = _write_phrasetable_file(keep_line)
-                            oo1.write(outline)
-                        sort_src = line[4][2]
-                        reserve_lines = []
-                    flag = False
+                            output_object.write(outline)
+                        count_src,reserve_lines = line[4][2],[]
             else:
                 # the first position
                 prev_line = line
-                sort_src = line[4][2]
+                count_src = line[4][2]
         if (len(reserve_lines)):
            for keep_line in reserve_lines:
-               keep_line[4][1] = sort_src
-               keep_line[0],keep_line[1] = keep_line[1],keep_line[0]
+               keep_line[4][1] = count_src
                outline = _write_phrasetable_file(keep_line)
-               oo1.write(outline)
-        sys.stderr.write("Done\n")
-        handle_file(os.path.normpath('/'.join([args.tempdir2,'target_priority'])),'close',oo1,mode='w')
-
-        tgt_priority_file = sort_file(combiner.output_file,tempdir=self.tempdir)
-
-        ''' traverse the second time when file is sorted by target
-        '''
-        count,sort_tgt,reserve_lines,prev_line=0,0,[],None
-        sys.stderr.write("Traverse the second time ...")
-        for line in tgt_priority_file:
-            print line
-            # print counting lines
-            if not count%100000:
-                sys.stderr.write(str(count)+'...')
-            count+=1
-
-            line = _load_line(line)
-            if (prev_line):
-                # they will never be identical
-                prev_line = self._recompute_occ(prev_line)
-                reserve_lines.append(prev_line)
-                #outline = _write_phrasetable_file(prev_line)
-                #output_object.write(outline)
-                prev_line = line
-
-                # print the line if it escapes block of sort_src
-                # otherwise just increase count
-                if (line[0] == reserve_lines[0][0]):
-                    sort_tgt += line[4][2]
-                else:
-                    for keep_line in reserve_lines:
-                        keep_line[4][1] = sort_tgt
-                        keep_line[0],keep_line[1] = keep_line[1],keep_line[0]
-                        outline = _write_phrasetable_file(keep_line)
-                        output_object.write(outline)
-                    sort_tgt = line[4][2]
-            else:
-                # the first position
-                prev_line = line
-                sort_tgt = line[4][2]
-        if (len(reserve_lines)):
-           for keep_line in reserve_lines:
-               keep_line[4][1] = sort_tgt
-               keep_line[0],keep_line[1] = keep_line[1],keep_line[0]
-               outline = _write_phrasetable_file(keep_line)
-               output_object.write(outline)
+               ouput_object.write(outline)
         sys.stderr.write("Done\n")
 
 
-    def _recompute_occ(self,line):
+    def _recompute_features(self,line):
         '''
         Compute the value of a single according to the co-occurrence
         format: src ||| tgt ||| prob1 lex1 prob2 lex2 ||| align ||| c_t c_s c_s_t ||| |||
         '''
-        coocc = line[4][2]
+        coocc = float(line[4][2])
         count_s = line[4][1]
         count_t = line[4][0]
 
@@ -433,6 +377,7 @@ class Merge_TM():
         line[2][1],line[2][3] = self.moses_interface._compute_lexical_weight(line[0],line[1],line[3])
 
         return line
+
 
     def _combine_occ(self,prev_line=None,cur_line=None):
         '''
@@ -581,9 +526,19 @@ class Triangulate_TMs():
         model1 = (file1obj, 1, 1)
         model2 = (file2obj, 1, 2)
         model1, model2 = self._ensure_inverted(model1, model2)
+        outtgt_file = "{0}/{1}.{2}".format(self.tempdir,"lexical_count","f")
+        output_compact = handle_file(outtgt_file, 'open', mode='w') # write one more file in format tgt ||| src ||| count_s+t
+        sys.stderr.write("Write a compact file to {0} \n" .format(outtgt_file))
         output_object = handle_file(self.output_file,'open',mode='w')
-        self._write_phrasetable(model1, model2, output_object)
+        # the function itself
+        self._write_phrasetable(model1, model2, output_object,output_compact)
+
         handle_file(self.output_file,'close',output_object,mode='w')
+        handle_file(outtgt_file,'close',output_compact,mode='w')
+
+        # sort the compact file by target side
+        self.moses_interface.phrase_count = sort_file(outtgt_file,tempdir=self.tempdir)
+
 
     def _ensure_inverted(self, model1, model2):
         ''' make sure that all the data is in the right format
@@ -628,7 +583,7 @@ class Triangulate_TMs():
 
                 outline = _write_phrasetable_file(line)
                 output_contr.write(outline)
-            handle_file(outfile,'close',output_contr,mode='w')
+            handle_file(outfile.name,'close',output_contr,mode='w')
             tmpfile = sort_file(outfile.name,tempdir=self.tempdir)
             #TODO: Check if it make senses
             if (mod[2] == model1[2]):
@@ -638,7 +593,7 @@ class Triangulate_TMs():
             sys.stderr.write("Done\n")
         return (model1, model2)
 
-    def _phrasetable_traversal(self,model1,model2,prev_line1,prev_line2,deci,output_object,iteration):
+    def _phrasetable_traversal(self,model1,model2,prev_line1,prev_line2,deci,output_object,output_compact):
         ''' A non-recursive way to read two models at the same time
             Notes: In moses phrase table, the longer phrase appears earlier than the short phrase
         '''
@@ -659,12 +614,12 @@ class Triangulate_TMs():
                     line2 = _load_line(model2[0].readline())
                     continue
                 else:
-                    self._combine_and_write(output_object)
+                    self._combine_and_write(output_object,output_compact)
 
             # handle if the matching is found
             if (not line1 or not line2):
                 #self.phrase_match = defaultdict(lambda: []*3)
-                self._combine_and_write(output_object)
+                self._combine_and_write(output_object,output_compact)
                 sys.stderr.write("Finish loading\n")
                 return None
 
@@ -681,11 +636,11 @@ class Triangulate_TMs():
                 elif (line1[0] > line2[0]):
                     line2 = _load_line(model2[0].readline())
 
-    def _combine_and_write(self,output_object):
+    def _combine_and_write(self,output_object,output_compact):
         ''' Follow Cohn at el.2007
         The conditional over the source-target pair is: p(s|t) = sum_i p(s|i,t)p(i|t) = sum_i p(s|i)p(i|t)
         in which i is the pivot which could be found in model1(pivot-src) and model2(src-tgt)
-        After combining two phrase-table, print them right after it
+        After combining two phrase-table, write them right after it
         '''
         for phrase1 in self.phrase_match[1]:
             for phrase2 in self.phrase_match[2]:
@@ -698,6 +653,7 @@ class Triangulate_TMs():
                 word_counts = self._get_word_counts(src, tgt, phrase1[4], phrase2[4])
                 outline = _write_phrasetable_file([src,tgt,features,word_alignments,word_counts])
                 output_object.write(outline)
+                output_compact.write(b'%s ||| %s ||| %i\n' %(tgt,src,word_counts[2]))
                 self._update_moses(src,tgt,word_alignments,word_counts)
         # reset the memory
         self.phrase_match = None
@@ -707,23 +663,14 @@ class Triangulate_TMs():
     def _update_moses(self, src, tgt, word_alignments, word_counts):
         ''' Update following variables: word counts e2f, f2e, phrase count e, f
         '''
-        # phrase count
-        #if (src in self.moses_interface.phrase_count_e):
-        #    self.moses_interface.phrase_count_e[src]+= word_counts[2]
-        #else:
-        #    self.moses_interface.phrase_count_e[src] = word_counts[2]
-        #
-        #if (tgt in self.moses_interface.phrase_count_f):
-        #    self.moses_interface.phrase_count_f[tgt]+= word_counts[2]
-        #else:
-        #    self.moses_interface.phrase_count_f[tgt] = word_counts[2]
-
         srcphrase = src.split(b' ')
         tgtphrase = tgt.split(b' ')
         for align in word_alignments:
             src_id,tgt_id=align
             self.moses_interface.word_pairs_e2f[srcphrase[src_id]][tgtphrase[tgt_id]] += word_counts[2]
+            #self.moses_interface.word_count_e(srcphrase[src_id]) += word_counts[2]
             self.moses_interface.word_pairs_f2e[tgtphrase[tgt_id]][srcphrase[src_id]] += word_counts[2]
+            #self.moses_interface.word_count_e(tgtphrase[tgt_id]) += word_counts[2]
 
         return None
 
@@ -765,7 +712,7 @@ class Triangulate_TMs():
             word_count[2] = self.computed(count1[2],count2[2])
         return word_count
 
-    def _write_phrasetable(self,model1,model2,output_object,inverted=False):
+    def _write_phrasetable(self,model1,model2,output_object,output_compact,inverted=False):
         """Incrementally load phrase tables, calculate score for increment and write it to output_object"""
         # interpolated models without re-normalization only need 'pairs', otherwise 'all' is the correct choice
         store_flag = 'all'
@@ -775,7 +722,7 @@ class Triangulate_TMs():
         sys.stderr.write('Incrementally loading and processing phrase tables...')
         # Start process phrase table
         self.phrase_match = defaultdict(lambda: []*3)
-        self._phrasetable_traversal(model1=model1, model2=model2, prev_line1=None, prev_line2=None, deci=0, output_object=output_object,iteration=0)
+        self._phrasetable_traversal(model1=model1, model2=model2, prev_line1=None, prev_line2=None, deci=0, output_object=output_object,output_compact=output_compact)
         sys.stderr.write("Done\n")
 
 
@@ -867,15 +814,12 @@ def get_geometric_mean(count1, count2):
     '''
     return sqrt(count1*count2)
 
-
-
 def _load_line(line):
     if (not line):
         return None
     ''' This function convert a string into an array of string and probability
         src ||| tgt ||| s|t s|t t|s t|s ||| align ||| countt counts countst ||| |||
     '''
-    #print "line : ", line
     line = line.rstrip().split(b'|||')
     if line[-1].endswith(b' |||'):
         line[-1] = line[-1][:-4]
