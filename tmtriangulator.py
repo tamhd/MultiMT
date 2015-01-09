@@ -153,7 +153,6 @@ class Moses:
         compute the lexical weight in phrase table based on the co-occurrence of word count
         '''
         #TODO: This implementation is wrong, should I keep all the count in memory
-        word_pairs = self.word_pairs_e2f
         align_rev = defaultdict(lambda: [])
         alignment=defaultdict(lambda:[])
 
@@ -164,8 +163,8 @@ class Moses:
         weight_st = defaultdict(lambda: [])
         weight_ts = defaultdict(lambda: [])
         for src_id,tgt_id in alignments:
-            weight_st[src_id].append(float(word_pairs[phrase_src[src_id]][phrase_tgt[tgt_id]]/self.word_count_f[phrase_tgt[tgt_id]]))
-            weight_ts[tgt_id].append(float(word_pairs[phrase_src[src_id]][phrase_tgt[tgt_id]]/self.word_count_e[phrase_src[src_id]]))
+            weight_st[src_id].append(float(self.word_pairs_e2f[phrase_src[src_id]][phrase_tgt[tgt_id]]/self.word_count_f[phrase_tgt[tgt_id]]))
+            weight_ts[tgt_id].append(float(self.word_pairs_e2f[phrase_src[src_id]][phrase_tgt[tgt_id]]/self.word_count_e[phrase_src[src_id]]))
         lex_st = 1.0
         lex_ts = 1.0
         for src_id,val_lst in weight_st.iteritems():
@@ -176,29 +175,27 @@ class Moses:
         return lex_st, lex_ts
 
     #TODO: write the general lexical functions (both probability and count) instead of two functions
-    def _get_lexical(self,path,bridge,direction):
+    def _get_lexical(self,path,bridge):
         ''' write the  lexical file
             named after: LexicalTranslationModel.pm->get_lexical
         '''
-        output_lex_prob = handle_file("{0}{1}.{2}".format(path,bridge,direction), 'open', mode='w')
-        output_lex_count = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",direction), 'open', mode='w')
+        output_lex_prob_e2f = handle_file("{0}{1}.{2}".format(path,bridge,'e2f'), 'open', mode='w')
+        output_lex_count_e2f = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'), 'open', mode='w')
+        output_lex_prob_f2e = handle_file("{0}{1}.{2}".format(path,bridge,'f2e'), 'open', mode='w')
+        output_lex_count_f2e = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'), 'open', mode='w')
 
-        if direction == "e2f":
-            word_pairs = self.word_pairs_e2f
-            word_count = self.word_count_f
-        else:
-            word_pairs = self.word_pairs_e2f
-            word_count = self.word_count_e
+        for e,tgt_hash in self.word_pairs_e2f.iteritems():
+            for f,val in tgt_hash.iteritems():
+                output_lex_count_e2f.write(b"%s %s %d %d\n" %(f,e,val,self.word_count_e[e]))
+                output_lex_prob_e2f.write(b"%s %s %.7f\n" %(f,e,float(val)/self.word_count_e[e]))
+                output_lex_count_f2e.write(b"%s %s %d %d\n" %(e,f,val,self.word_count_f[f]))
+                output_lex_prob_f2e.write(b"%s %s %.7f\n" %(e,f,float(val)/self.word_count_f[f]))
 
-        for src,tgt_hash in word_pairs.iteritems():
-            for tgt,val in tgt_hash.iteritems():
-                x,y = src,tgt
-                if direction == 'f2e':
-                    x,y = tgt,src
-                output_lex_count.write(b"%s %s %d %d\n" %(y,x,val,word_count[x]))
-                output_lex_prob.write(b"%s %s %.7f\n" %(y,x,float(val)/word_count[x]))
-        handle_file("{0}{1}.{2}".format(path,bridge,direction),'close',output_lex_prob,mode='w')
-        handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",direction),'close',output_lex_count,mode='w')
+        handle_file("{0}{1}.{2}".format(path,bridge,'e2f'),'close',output_lex_prob_e2f,mode='w')
+        handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'),'close',output_lex_count_e2f,mode='w')
+        handle_file("{0}{1}.{2}".format(path,bridge,'f2e'),'close',output_lex_prob_f2e,mode='w')
+        handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'),'close',output_lex_count_f2e,mode='w')
+
 
     def _process_lexical_count(self,tempdir=None):
         ''' compute the count of target phrase, then write them down in format: src ||| tgt ||| count
@@ -264,8 +261,7 @@ class Merge_TM():
 
         # get the decoding
         bridge = os.path.basename(self.output_file).replace("phrase-table","/lex").replace(".gz", "") # create the lexical associated with phrase table
-        self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge, "e2f")
-        self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge, "f2e")
+        self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge)
 
         # handle the phrase count
         self.phrase_count_f = self.moses_interface._process_lexical_count(tempdir=self.tempdir)
@@ -679,9 +675,9 @@ class Triangulate_TMs():
         for align in word_alignments:
             src_id,tgt_id=align
             self.moses_interface.word_pairs_e2f[srcphrase[src_id]][tgtphrase[tgt_id]] += word_counts[2]
-            self.moses_interface.word_count_e(srcphrase[src_id]) += word_counts[2]
+            self.moses_interface.word_count_e[srcphrase[src_id]] += word_counts[2]
             #self.moses_interface.word_pairs_f2e[tgtphrase[tgt_id]][srcphrase[src_id]] += word_counts[2]
-            self.moses_interface.word_count_f(tgtphrase[tgt_id]) += word_counts[2]
+            self.moses_interface.word_count_f[tgtphrase[tgt_id]] += word_counts[2]
 
         return None
 
