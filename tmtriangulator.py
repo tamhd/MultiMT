@@ -141,7 +141,7 @@ class Moses:
         self.number_of_features = number_of_features
 
         self.word_pairs_e2f = defaultdict(lambda: defaultdict(long))
-        self.word_pairs_f2e = defaultdict(lambda:defaultdict(long))
+        #self.word_pairs_f2e = defaultdict(lambda:defaultdict(long))
 
         self.word_count_e = defaultdict(long)
         self.word_count_f = defaultdict(long)
@@ -152,34 +152,28 @@ class Moses:
         '''
         compute the lexical weight in phrase table based on the co-occurrence of word count
         '''
+        #TODO: This implementation is wrong, should I keep all the count in memory
         word_pairs = self.word_pairs_e2f
         align_rev = defaultdict(lambda: [])
+        alignment=defaultdict(lambda:[])
 
         phrase_src = src.split(b' ')
         phrase_tgt = tgt.split(b' ')
-        # lexical (s|t)
-        lexical_weight_st = 1
-        alignment=defaultdict(lambda:[])
-        for src_id,tgt_id in alignments:
-            alignment[src_id].append(tgt_id)
-        for src_id,tgt_lst in alignment.iteritems():
-            count_s = sum(word_pairs[phrase_src[src_id]].values())
-            count_s_t = []
-            for tgt_id in tgt_lst:
-                align_rev[phrase_tgt[tgt_id]].append(phrase_src[src_id])
-                count_s_t.append(word_pairs[phrase_src[src_id]][phrase_tgt[tgt_id]])
-            lexical_weight_st *= 1.0/len(count_s_t) * float(sum(count_s_t))/count_s
-        # lexical (t|s)
-        lexical_weight_ts = 1
-        word_pairs2 = self.word_pairs_f2e
-        for tgtw, src_lst in align_rev.iteritems():
-            count_t = sum(word_pairs2[tgtw].values())
-            count_t_s = []
-            for srcw in src_lst:
-                count_t_s.append(word_pairs2[tgtw][srcw])
-            lexical_weight_ts *= 1.0/len(count_t_s) * float(sum(count_t_s))/count_t
 
-        return lexical_weight_st, lexical_weight_ts
+        # Value P(s|t) = pi(avg(w(si|ti)))
+        weight_st = defaultdict(lambda: [])
+        weight_ts = defaultdict(lambda: [])
+        for src_id,tgt_id in alignments:
+            weight_st[src_id].append(float(word_pairs[phrase_src[src_id]][phrase_tgt[tgt_id]]/self.word_count_f[phrase_tgt[tgt_id]]))
+            weight_ts[tgt_id].append(float(word_pairs[phrase_src[src_id]][phrase_tgt[tgt_id]]/self.word_count_e[phrase_src[src_id]]))
+        lex_st = 1.0
+        lex_ts = 1.0
+        for src_id,val_lst in weight_st.iteritems():
+            lex_st *= sum(val_lst)/len(val_lst)
+        for tgt_id,val_lst in weight_ts.iteritems():
+            lex_ts *= sum(val_lst)/len(val_lst)
+
+        return lex_st, lex_ts
 
     #TODO: write the general lexical functions (both probability and count) instead of two functions
     def _get_lexical(self,path,bridge,direction):
@@ -191,14 +185,18 @@ class Moses:
 
         if direction == "e2f":
             word_pairs = self.word_pairs_e2f
+            word_count = self.word_count_f
         else:
-            word_pairs = self.word_pairs_f2e
+            word_pairs = self.word_pairs_e2f
+            word_count = self.word_count_e
 
-        for x in sorted(word_pairs):
-            all_x = sum(word_pairs[x].values())
-            for y in sorted(word_pairs[x]):
-                output_lex_count.write(b"%s %s %d %d\n" %(x,y,word_pairs[x][y],all_x))
-                output_lex_prob.write(b"%s %s %.7f\n" %(x,y,float(word_pairs[x][y])/all_x))
+        for src,tgt_hash in word_pairs.iteritems():
+            for tgt,val in tgt_hash.iteritems():
+                x,y = src,tgt
+                if direction == 'f2e':
+                    x,y = tgt,src
+                output_lex_count.write(b"%s %s %d %d\n" %(y,x,val,word_count[x]))
+                output_lex_prob.write(b"%s %s %.7f\n" %(y,x,float(val)/word_count[x]))
         handle_file("{0}{1}.{2}".format(path,bridge,direction),'close',output_lex_prob,mode='w')
         handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",direction),'close',output_lex_count,mode='w')
 
@@ -681,9 +679,9 @@ class Triangulate_TMs():
         for align in word_alignments:
             src_id,tgt_id=align
             self.moses_interface.word_pairs_e2f[srcphrase[src_id]][tgtphrase[tgt_id]] += word_counts[2]
-            #self.moses_interface.word_count_e(srcphrase[src_id]) += word_counts[2]
-            self.moses_interface.word_pairs_f2e[tgtphrase[tgt_id]][srcphrase[src_id]] += word_counts[2]
-            #self.moses_interface.word_count_e(tgtphrase[tgt_id]) += word_counts[2]
+            self.moses_interface.word_count_e(srcphrase[src_id]) += word_counts[2]
+            #self.moses_interface.word_pairs_f2e[tgtphrase[tgt_id]][srcphrase[src_id]] += word_counts[2]
+            self.moses_interface.word_count_f(tgtphrase[tgt_id]) += word_counts[2]
 
         return None
 
