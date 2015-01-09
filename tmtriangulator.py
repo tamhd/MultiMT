@@ -7,7 +7,7 @@
 #TODO: It's still triangulation but not naive anymore
 #Compute the data based solely on the co-occurrences, but keep the probability in case of emergency
 # ref: /a/merkur3/thoang/eman/ufal-smt-playground/multi_playground/s.mosesgiza.f282bc2e.20140906-1739/moses/scripts/training/LexicalTranslationModel.pm get_lexical_counts
-
+#TODO: Cope with the problem of NULL pointer
 from __future__ import division, unicode_literals
 import sys
 import os
@@ -162,9 +162,21 @@ class Moses:
         # Value P(s|t) = pi(avg(w(si|ti)))
         weight_st = defaultdict(lambda: [])
         weight_ts = defaultdict(lambda: [])
+        src_lst,tgt_lst = [],[]
         for src_id,tgt_id in alignments:
-            weight_st[src_id].append(float(self.word_pairs_e2f[phrase_src[src_id]][phrase_tgt[tgt_id]]/self.word_count_f[phrase_tgt[tgt_id]]))
-            weight_ts[tgt_id].append(float(self.word_pairs_e2f[phrase_src[src_id]][phrase_tgt[tgt_id]]/self.word_count_e[phrase_src[src_id]]))
+            weight_st[src_id].append(float(self.word_pairs_e2f[phrase_src[src_id]][phrase_tgt[tgt_id]])/self.word_count_f[phrase_tgt[tgt_id]])
+            weight_ts[tgt_id].append(float(self.word_pairs_e2f[phrase_src[src_id]][phrase_tgt[tgt_id]])/self.word_count_e[phrase_src[src_id]])
+            src_lst.append(src_id)
+            tgt_lst.append(tgt_id)
+        # Handle the unaligned words
+        for idx in range(len(phrase_src)):
+            if idx not in src_lst:
+                weight_st[idx].append(float(self.word_pairs_e2f[phrase_src[idx]][b'NULL'])/self.word_count_f[b'NULL'])
+        for idx in range(len(phrase_tgt)):
+            if idx not in tgt_lst:
+                weight_ts[idx].append(float(self.word_pairs_e2f[b'NULL'][phrase_tgt[idx]])/self.word_count_e[b'NULL'])
+
+        # Compute the lexical
         lex_st = 1.0
         lex_ts = 1.0
         for src_id,val_lst in weight_st.iteritems():
@@ -672,12 +684,29 @@ class Triangulate_TMs():
         '''
         srcphrase = src.split(b' ')
         tgtphrase = tgt.split(b' ')
+        tgt_lst = []
+        src_lst = []
         for align in word_alignments:
             src_id,tgt_id=align
             self.moses_interface.word_pairs_e2f[srcphrase[src_id]][tgtphrase[tgt_id]] += word_counts[2]
             self.moses_interface.word_count_e[srcphrase[src_id]] += word_counts[2]
             #self.moses_interface.word_pairs_f2e[tgtphrase[tgt_id]][srcphrase[src_id]] += word_counts[2]
             self.moses_interface.word_count_f[tgtphrase[tgt_id]] += word_counts[2]
+            tgt_lst.append(tgt_id)
+            src_lst.append(src_id)
+
+        # unaligned words
+        for idx in range(len(tgtphrase)):
+            if idx not in tgt_lst:
+                self.moses_interface.word_pairs_e2f[b'NULL'][tgtphrase[idx]] += word_counts[2]
+                self.moses_interface.word_count_e[b'NULL']+=word_counts[2]
+                self.moses_interface.word_count_f[tgtphrase[idx]] += word_counts[2]
+        # unaligned words
+        for idx in range(len(srcphrase)):
+            if idx not in src_lst:
+                self.moses_interface.word_pairs_e2f[srcphrase[idx]][b'NULL'] += word_counts[2]
+                self.moses_interface.word_count_f[b'NULL']+=word_counts[2]
+                self.moses_interface.word_count_e[srcphrase[idx]] += word_counts[2]
 
         return None
 
