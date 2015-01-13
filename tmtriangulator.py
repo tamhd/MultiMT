@@ -223,7 +223,11 @@ class Moses:
             sys.stderr.write("The phrase count is empty\n")
             return None
         count_tgt,key_tgt,reserve_lines = 0,None,[]
+        count = 0
         for line in self.phrase_count_f:
+            if not count%1000000:
+                sys.stderr.write(str(count)+"...")
+            count+=1
             line = line.strip().split(b' ||| ')
             if (key_tgt and key_tgt != line[0]):
                 for l in reserve_lines:
@@ -236,38 +240,48 @@ class Moses:
             for l in reserve_lines:
                 outsrc.write(b"%s ||| %s ||| %i\n" %(l,key_tgt,count_tgt))
         handle_file(outsrc_file, 'close', outsrc, mode='w')
-
+        sys.stderr.write("Remove temporary target compact file {0}\n".format(self.phrase_count_f.name))
+        os.remove(self.phrase_count_f.name)
+        self.phrase_count_f = None
         # sort the lexical count by source
         src_sort_file = sort_file(outsrc_file,tempdir=tempdir)
+        sys.stderr.write("Remove unsorted target compact file {0}\n".format(outsrc_file))
+        os.remove(outsrc_file)
+
         return src_sort_file
 
 
-    def _process_lexical_count_e(self,tempdir=None):
+    def _process_lexical_count_e(self,phrasefile,tempdir=None):
         ''' compute the count of source phrase, then write them down in the same format: src ||| tgt ||| count
             then sort the new file
         '''
-        #TODO: Change the save from a list to a single variable
         sys.stderr.write("Process lexical count source: ")
         outsrc_file = "{0}/{1}.{2}".format(tempdir,"lexical_count","ee2f")
         outsrc = handle_file(outsrc_file, 'open', mode='w')
-        if (not self.phrase_count_e): # do nothing for nothing
+        #insrc = handle_file(phrasefile,'open',mode='r')
+        if (not phrasefile): # do nothing for nothing
             sys.stderr.write("The phrase count is empty\n")
             return None
-        count_tgt,key_src,reserve_lines = 0,None,[]
-        for line in self.phrase_count_e:
-            line = line.strip().split(b' ||| ')
+        count_src,key_src,reserve_lines = 0,None,[]
+        count = 0
+        for line in phrasefile:
+            if not count%1000000:
+                sys.stderr.write(str(count)+"...")
+            count+=1
+            line = _load_line(line)
             if (key_src and key_src != line[0]):
                 for l in reserve_lines:
-                    outsrc.write(b"%s ||| %s ||| %i\n" %(key_src,l,count_tgt))
-                reserve_lines,count_tgt = [],0
-            count_tgt += int(line[2])
+                    outsrc.write(b"%s ||| %s ||| %i\n" %(key_src,l,count_src))
+                reserve_lines,count_src = [],0
+            count_src += int(line[4][2])
             key_src=line[0]
             reserve_lines.append(line[1])
-        if (count_tgt):
+        if (count_src):
             for l in reserve_lines:
-                outsrc.write(b"%s ||| %s ||| %i\n" %(key_src,l,count_tgt))
+                outsrc.write(b"%s ||| %s ||| %i\n" %(key_src,l,count_src))
         handle_file(outsrc_file, 'close', outsrc, mode='w')
         sys.stderr.write("No need for re-sorting the phrase\n")
+        phrasefile.seek(0)
         # sort the lexical count by source
         # no need to be sort
         #src_sort_file = sort_file(outsrc_file,tempdir=tempdir)
@@ -313,7 +327,7 @@ class Merge_TM():
 
         # handle the phrase count
         self.phrase_count_f = self.moses_interface._process_lexical_count_f(tempdir=self.tempdir)
-        self.phrase_count_e = self.moses_interface._process_lexical_count_e(tempdir=self.tempdir)
+        self.phrase_count_e = self.moses_interface._process_lexical_count_e(self.model,tempdir=self.tempdir)
 
 
     def _combine_TM(self,flag=False,prev_line=None):
@@ -585,7 +599,10 @@ class Triangulate_TMs():
 
         # sort the compact file by target side
         self.moses_interface.phrase_count_f = sort_file(outtgt_file,tempdir=self.tempdir)
-        self.moses_interface.phrase_count_e = sort_file(outsrc_file,tempdir=self.tempdir)
+        sys.stderr.write("Remove unsorted target compact file {0}\n" .format(outtgt_file))
+        os.remove(outtgt_file)
+        #self.moses_interface.phrase_count_e = sort_file(outsrc_file,tempdir=self.tempdir)
+        os.remove(outsrc_file)
 
     def _ensure_inverted(self, model1, model2):
         ''' make sure that all the data is in the right format
@@ -632,6 +649,8 @@ class Triangulate_TMs():
                 output_contr.write(outline)
             handle_file(outfile.name,'close',output_contr,mode='w')
             tmpfile = sort_file(outfile.name,tempdir=self.tempdir)
+            sys.stderr.write("Remove file: {0}\n" .format(outfile.name))
+            os.remove(outfile.name)
             #TODO: Check if it make senses
             if (mod[2] == model1[2]):
                 model1 = (tmpfile, model1[1], model1[2])
@@ -701,7 +720,7 @@ class Triangulate_TMs():
                 outline = _write_phrasetable_file([src,tgt,features,word_alignments,word_counts])
                 output_object.write(outline)
                 output_tgt.write(b'%s ||| %s ||| %i\n' %(tgt,src,word_counts[2]))
-                output_src.write(b'%s ||| %s ||| %i\n' %(src,tgt,word_counts[2]))
+                #output_src.write(b'%s ||| %s ||| %i\n' %(src,tgt,word_counts[2]))
 
                 self._update_moses(src,tgt,word_alignments,word_counts)
         # reset the memory
@@ -988,7 +1007,8 @@ if __name__ == "__main__":
         combiner.combine_standard()
         # sort the file
         tmpfile = sort_file(combiner.output_file,tempdir=args.tempdir2)
-        #os.remove(combiner.output_file)
+        sys.stderr.write("Remove the unsorted phrase table {0}\n".format(combiner.output_file))
+        os.remove(combiner.output_file)
         # combine the new file
         merger = Merge_TM(model=tmpfile,
                           output_file=args.output,
