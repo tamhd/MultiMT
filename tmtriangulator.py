@@ -9,6 +9,7 @@
 # ref: /a/merkur3/thoang/eman/ufal-smt-playground/multi_playground/s.mosesgiza.f282bc2e.20140906-1739/moses/scripts/training/LexicalTranslationModel.pm get_lexical_counts
 #TODO: Cope with the problem of NULL pointer
 #TODO: Cope with the problem of overloading memory
+#TODO: Cope with the problem of overloading hard drive, stop writing the src phrase count and remove the used file
 from __future__ import division, unicode_literals
 import sys
 import os
