@@ -10,6 +10,7 @@
 #TODO: Cope with the problem of NULL pointer
 #TODO: Cope with the problem of overloading memory
 #TODO: Cope with the problem of overloading hard drive, stop writing the src phrase count and remove the used file
+#TODO: Cope with the problem of time constrains, parallelism
 from __future__ import division, unicode_literals
 import sys
 import os
@@ -23,7 +24,7 @@ from operator import mul
 from tempfile import NamedTemporaryFile
 #from tmcombine import Moses, Moses_Alignment, to_list
 from subprocess import Popen
-
+from multiprocessing import Pool,Value,Process
 
 try:
     from itertools import izip
@@ -190,6 +191,7 @@ class Moses:
         return lex_st, lex_ts
 
     #TODO: write the general lexical functions (both probability and count) instead of two functions
+    #TODO: for the sake of parallelism, rewrite following functions to standards
     def _get_lexical(self,path,bridge,flag=0):
         ''' write the  lexical file
             named after: LexicalTranslationModel.pm->get_lexical
@@ -295,6 +297,107 @@ class Moses:
         #src_sort_file = sort_file(outsrc_file,tempdir=tempdir)
         return handle_file(outsrc_file, 'open', mode='r')
 
+# GLOBAL
+def _glob_get_lexical(word_pairs_e2f,word_count_e,word_count_f,path,bridge,flag=0):
+    ''' write the  lexical file
+            named after: LexicalTranslationModel.pm->get_lexical
+    '''
+    sys.stderr.write("\nWrite the lexical files ")
+    output_lex_prob_e2f = handle_file("{0}{1}.{2}".format(path,bridge,'e2f'), 'open', mode='w')
+    output_lex_prob_f2e = handle_file("{0}{1}.{2}".format(path,bridge,'f2e'), 'open', mode='w')
+    if flag == 1:
+        output_lex_count_e2f = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'), 'open', mode='w')
+        output_lex_count_f2e = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'), 'open', mode='w')
+
+    count = 0
+    for e,tgt_hash in word_pairs_e2f.iteritems():
+        for f,val in tgt_hash.iteritems():
+            if not count%100000:
+                sys.stderr.write(str(count)+'...')
+            count+=1
+            if flag == 1:
+                output_lex_count_e2f.write(b"%s %s %d %d\n" %(f,e,val,word_count_e[e]))
+                output_lex_count_f2e.write(b"%s %s %d %d\n" %(e,f,val,word_count_f[f]))
+            output_lex_prob_e2f.write(b"%s %s %.7f\n" %(f,e,float(val)/word_count_e[e]))
+            output_lex_prob_f2e.write(b"%s %s %.7f\n" %(e,f,float(val)/word_count_f[f]))
+
+    handle_file("{0}{1}.{2}".format(path,bridge,'e2f'),'close',output_lex_prob_e2f,mode='w')
+    handle_file("{0}{1}.{2}".format(path,bridge,'f2e'),'close',output_lex_prob_f2e,mode='w')
+    if flag == 1:
+        handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'),'close',output_lex_count_e2f,mode='w')
+        handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'),'close',output_lex_count_f2e,mode='w')
+    sys.stderr.write("Done\n")
+    return 1
+
+def _glob_process_lexical_count_f(phrase_count_f,tempdir=None):
+    ''' compute the count of target phrase, then write them down in format: src ||| tgt ||| count
+            then sort the new file
+    '''
+    sys.stderr.write("\nProcess lexical count target: ")
+    outsrc_file = "{0}/{1}.{2}".format(tempdir,"lexical_count","fe2f")
+    outsrc = handle_file(outsrc_file, 'open', mode='w')
+    if (not phrase_count_f): # do nothing for nothing
+        sys.stderr.write("The phrase count is empty\n")
+        return None
+    count_tgt,key_tgt,reserve_lines = 0,None,[]
+    count = 0
+    for line in phrase_count_f:
+        if not count%1000000:
+            sys.stderr.write(str(count)+"...")
+        count+=1
+        line = line.strip().split(b' ||| ')
+        if (key_tgt and key_tgt != line[0]):
+            for l in reserve_lines:
+                outsrc.write(b"%s ||| %s ||| %i\n" %(l,key_tgt,count_tgt))
+            reserve_lines,count_tgt = [],0
+        count_tgt += int(line[2])
+        key_tgt=line[0]
+        reserve_lines.append(line[1])
+    if (count_tgt):
+        for l in reserve_lines:
+            outsrc.write(b"%s ||| %s ||| %i\n" %(l,key_tgt,count_tgt))
+    handle_file(outsrc_file, 'close', outsrc, mode='w')
+    sys.stderr.write("Remove temporary target compact file {0}\n".format(phrase_count_f.name))
+    os.remove(phrase_count_f.name)
+    phrase_count_f = None
+    # sort the lexical count by source
+    src_sort_file = sort_file_fix(outsrc_file,'phrase_count.f',tempdir=tempdir)
+    sys.stderr.write("Remove unsorted target compact file {0}\n".format(outsrc_file))
+    os.remove(outsrc_file)
+    return 1
+
+def _glob_process_lexical_count_e(phrasefile,tempdir=None):
+    ''' compute the count of source phrase, then write them down in the same format: src ||| tgt ||| count
+            then sort the new file
+    '''
+    sys.stderr.write("Process lexical count source: ")
+    outsrc_file = "{0}/{1}.{2}".format(tempdir,"phrase_count","e")
+    outsrc = handle_file(outsrc_file, 'open', mode='w')
+    #insrc = handle_file(phrasefile,'open',mode='r')
+    if (not phrasefile): # do nothing for nothing
+        sys.stderr.write("The phrase count is empty\n")
+        return None
+    count_src,key_src,reserve_lines = 0,None,[]
+    count = 0
+    for line in phrasefile:
+        if not count%1000000:
+            sys.stderr.write(str(count)+"...")
+        count+=1
+        line = _load_line(line)
+        if (key_src and key_src != line[0]):
+            for l in reserve_lines:
+                outsrc.write(b"%s ||| %s ||| %i\n" %(key_src,l,count_src))
+            reserve_lines,count_src = [],0
+        count_src += int(line[4][2])
+        key_src=line[0]
+        reserve_lines.append(line[1])
+    if (count_src):
+        for l in reserve_lines:
+            outsrc.write(b"%s ||| %s ||| %i\n" %(key_src,l,count_src))
+    handle_file(outsrc_file, 'close', outsrc, mode='w')
+    sys.stderr.write("No need for re-sorting the phrase\n")
+    phrasefile.seek(0)
+    return 1
 
 #merge the noisy phrase table
 class Merge_TM():
@@ -327,15 +430,25 @@ class Merge_TM():
         self.action=action
         self.moses_interface=moses_interface
         self.tempdir=tempdir
-
-        # get the decoding
+        # Parallelism, hack-ish way to run parallel
+        # Damn python
+        pool = Pool(processes=3)
+        # get the path
         bridge = os.path.basename(self.output_file).replace("phrase-table","/lex").replace(".gz", "") # create the lexical associated with phrase table
-        self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge,flag=1)
-
+        #self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge,flag=0)
+        lexc = Process(target=_glob_get_lexical, args=[self.moses_interface.word_pairs_e2f,self.moses_interface.word_count_e,self.moses_interface.word_count_f,os.path.dirname(os.path.realpath(self.output_file)), bridge,0])
         # handle the phrase count
-        self.phrase_count_f = self.moses_interface._process_lexical_count_f(tempdir=self.tempdir)
-        self.phrase_count_e = self.moses_interface._process_lexical_count_e(self.model,tempdir=self.tempdir)
+        #self.phrase_count_f = self.moses_interface._process_lexical_count_f(tempdir=self.tempdir)
+        lexf = Process(target=_glob_process_lexical_count_f, args=[self.moses_interface.phrase_count_f,self.tempdir])
+        #self.phrase_count_e = self.moses_interface._process_lexical_count_e(self.model,tempdir=self.tempdir)
+        lexe = Process(target=_glob_process_lexical_count_e, args=[self.model,self.tempdir])
+        for p in [lexc,lexf,lexe]:
+            p.start()
+            p.join()
+        self.phrase_count_e=handle_file(os.path.normpath("{0}/{1}".format(self.tempdir,"phrase_count.e")),'open',mode='r')
+        self.phrase_count_f=handle_file(os.path.normpath("{0}/{1}".format(self.tempdir,"phrase_count.f")),'open',mode='r')
 
+        print self.phrase_count_e, self.phrase_count_f, "<------------"
 
     def _combine_TM(self,flag=False,prev_line=None):
         '''
@@ -885,6 +998,26 @@ def sort_file(filename,tempdir=None):
     outfile.seek(0)
 
     return outfile
+
+def sort_file_fix(filename,newname,tempdir=None):
+    """Sort a file and return temporary file with fix name"""
+
+    cmd = ['sort', filename]
+    env = {}
+    env['LC_ALL'] = 'C'
+    if tempdir:
+        cmd.extend(['-T',tempdir])
+
+    #outfile = NamedTemporaryFile(delete=False,dir=tempdir)
+    outfile=open("{0}/{1}".format(tempdir,newname),mode='w')
+    sys.stderr.write('LC_ALL=C ' + ' '.join(cmd) + ' > ' + outfile.name + '\n')
+    p = Popen(cmd,env=env,stdout=outfile)
+    p.wait()
+
+    outfile.seek(0)
+
+    return outfile
+
 
 
 def dot_product(a,b):
