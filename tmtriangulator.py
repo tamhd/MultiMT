@@ -190,27 +190,35 @@ class Moses:
         return lex_st, lex_ts
 
     #TODO: write the general lexical functions (both probability and count) instead of two functions
-    def _get_lexical(self,path,bridge):
+    def _get_lexical(self,path,bridge,flag=0):
         ''' write the  lexical file
             named after: LexicalTranslationModel.pm->get_lexical
         '''
+        sys.stderr.write("\nWrite the lexical files ")
         output_lex_prob_e2f = handle_file("{0}{1}.{2}".format(path,bridge,'e2f'), 'open', mode='w')
-        output_lex_count_e2f = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'), 'open', mode='w')
         output_lex_prob_f2e = handle_file("{0}{1}.{2}".format(path,bridge,'f2e'), 'open', mode='w')
-        output_lex_count_f2e = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'), 'open', mode='w')
+        if flag == 1:
+            output_lex_count_e2f = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'), 'open', mode='w')
+            output_lex_count_f2e = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'), 'open', mode='w')
 
+        count = 0
         for e,tgt_hash in self.word_pairs_e2f.iteritems():
             for f,val in tgt_hash.iteritems():
-                output_lex_count_e2f.write(b"%s %s %d %d\n" %(f,e,val,self.word_count_e[e]))
+                if not count%100000:
+                    sys.stderr.write(str(count)+'...')
+                count+=1
+                if flag == 1:
+                    output_lex_count_e2f.write(b"%s %s %d %d\n" %(f,e,val,self.word_count_e[e]))
+                    output_lex_count_f2e.write(b"%s %s %d %d\n" %(e,f,val,self.word_count_f[f]))
                 output_lex_prob_e2f.write(b"%s %s %.7f\n" %(f,e,float(val)/self.word_count_e[e]))
-                output_lex_count_f2e.write(b"%s %s %d %d\n" %(e,f,val,self.word_count_f[f]))
                 output_lex_prob_f2e.write(b"%s %s %.7f\n" %(e,f,float(val)/self.word_count_f[f]))
 
         handle_file("{0}{1}.{2}".format(path,bridge,'e2f'),'close',output_lex_prob_e2f,mode='w')
-        handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'),'close',output_lex_count_e2f,mode='w')
         handle_file("{0}{1}.{2}".format(path,bridge,'f2e'),'close',output_lex_prob_f2e,mode='w')
-        handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'),'close',output_lex_count_f2e,mode='w')
-
+        if flag == 1:
+            handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'),'close',output_lex_count_e2f,mode='w')
+            handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'),'close',output_lex_count_f2e,mode='w')
+        sys.stderr.write("Done\n")
 
     def _process_lexical_count_f(self,tempdir=None):
         ''' compute the count of target phrase, then write them down in format: src ||| tgt ||| count
@@ -318,12 +326,11 @@ class Merge_TM():
         self.output_lexical = output_lexical
         self.action=action
         self.moses_interface=moses_interface
-        sys.stderr.write("\nWrite the lexical files")
         self.tempdir=tempdir
 
         # get the decoding
         bridge = os.path.basename(self.output_file).replace("phrase-table","/lex").replace(".gz", "") # create the lexical associated with phrase table
-        self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge)
+        self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge,flag=1)
 
         # handle the phrase count
         self.phrase_count_f = self.moses_interface._process_lexical_count_f(tempdir=self.tempdir)
