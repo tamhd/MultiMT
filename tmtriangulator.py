@@ -25,6 +25,7 @@ from tempfile import NamedTemporaryFile
 #from tmcombine import Moses, Moses_Alignment, to_list
 from subprocess import Popen
 from multiprocessing import Pool,Value,Process
+from datetime import datetime
 
 try:
     from itertools import izip
@@ -444,11 +445,13 @@ class Merge_TM():
         lexe = Process(target=_glob_process_lexical_count_e, args=[self.model,self.tempdir])
         for p in [lexc,lexf,lexe]:
             p.start()
+            sys.stderr.write(" --- process started at: {0} --- ".format(datetime.now()))
+        for p in [lexc,lexf,lexe]:
             p.join()
+            sys.stderr.write("--- process joined at: {0} --- ".format(datetime.now()))
+
         self.phrase_count_e=handle_file(os.path.normpath("{0}/{1}".format(self.tempdir,"phrase_count.e")),'open',mode='r')
         self.phrase_count_f=handle_file(os.path.normpath("{0}/{1}".format(self.tempdir,"phrase_count.f")),'open',mode='r')
-
-        print self.phrase_count_e, self.phrase_count_f, "<------------"
 
     def _combine_TM(self,flag=False,prev_line=None):
         '''
