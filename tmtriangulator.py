@@ -487,7 +487,7 @@ class Merge_TM():
         count = 0
 
         # keep the prev_line in memory until it break prev_line[0]
-        for line,phrase_count_f,phrase_count_e in zip(self.model,self.phrase_count_f,self.phrase_count_e):
+        for line,phrase_count_f,phrase_count_e in izip(self.model,self.phrase_count_f,self.phrase_count_e):
             if not count%1000000:
                 sys.stderr.write(str(count)+'...')
             count+=1
