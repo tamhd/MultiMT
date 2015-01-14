@@ -422,7 +422,7 @@ class Merge_TM():
                       ):
 
         self.mode = mode
-        self.model = model # the model file
+        #self.model = model # the model file
         self.output_file = output_file
         self.lang_src = lang_src
         self.lang_target = lang_target
@@ -433,26 +433,44 @@ class Merge_TM():
         self.tempdir=tempdir
         # Parallelism, hack-ish way to run parallel
         # Damn python
-        pool = Pool(processes=3)
+
+        # sort the file
+        phsr = Process(target=sort_file_fix,args=(model,'phrase_table.sort',self.tempdir))
+        sys.stderr.write(" [sorting phrase table started at: {0}] ".format(datetime.now()))
+        phsr.start()
+
         # get the path
         bridge = os.path.basename(self.output_file).replace("phrase-table","/lex").replace(".gz", "") # create the lexical associated with phrase table
         #self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge,flag=0)
         lexc = Process(target=_glob_get_lexical, args=[self.moses_interface.word_pairs_e2f,self.moses_interface.word_count_e,self.moses_interface.word_count_f,os.path.dirname(os.path.realpath(self.output_file)), bridge,0])
+        sys.stderr.write(" [writing lexical files started at: {0}] ".format(datetime.now()))
+        lexc.start()
         # handle the phrase count
         #self.phrase_count_f = self.moses_interface._process_lexical_count_f(tempdir=self.tempdir)
         lexf = Process(target=_glob_process_lexical_count_f, args=[self.moses_interface.phrase_count_f,self.tempdir])
+        sys.stderr.write(" [computing target counts started at: {0}] ".format(datetime.now()))
+        lexf.start()
+
+        phsr.join()
+        sys.stderr.write(" [sorting phrase table joined at: {0}] ".format(datetime.now()))
+        sys.stderr.write("Remove the unsorted phrase table {0}\n".format(combiner.output_file))
+        os.remove(model)
+        self.model = handle_file(os.path.normpath("{0}/{1}".format(self.tempdir,"phrase_table.sort")),'open',mode='r')
+
         #self.phrase_count_e = self.moses_interface._process_lexical_count_e(self.model,tempdir=self.tempdir)
         lexe = Process(target=_glob_process_lexical_count_e, args=[self.model,self.tempdir])
-        for p in [lexc,lexf,lexe]:
-            p.start()
-            sys.stderr.write(" --- process started at: {0} --- ".format(datetime.now()))
-        for p in [lexc,lexf,lexe]:
-            p.join()
-            sys.stderr.write("--- process joined at: {0} --- ".format(datetime.now()))
+        lexe.start()
+        sys.stderr.write(" [computing source counts started at: {0}] ".format(datetime.now()))
+
+        lexc.join()
+        sys.stderr.write(" [writing lexical files joined at: {0}] ".format(datetime.now()))
+        lexf.join()
+        sys.stderr.write(" [computing target counts joined at: {0}] ".format(datetime.now()))
+        lexe.join()
+        sys.stderr.write(" [computing source counts joined at: {0}] ".format(datetime.now()))
 
         self.phrase_count_e=handle_file(os.path.normpath("{0}/{1}".format(self.tempdir,"phrase_count.e")),'open',mode='r')
         self.phrase_count_f=handle_file(os.path.normpath("{0}/{1}".format(self.tempdir,"phrase_count.f")),'open',mode='r')
-
     def _combine_TM(self,flag=False,prev_line=None):
         '''
         Get the unification of alignment
@@ -509,6 +527,7 @@ class Merge_TM():
                     continue
                 else:
                     # when you get out of the identical blog, start writing
+                    prev_line = self._recompute_features(prev_line)
                     outline = _write_phrasetable_file(prev_line)
                     output_object.write(outline)
                     prev_line = line
@@ -516,6 +535,7 @@ class Merge_TM():
                 # the first position
                 prev_line = line
         if (len(prev_line)):
+            prev_line = self._recompute_features(prev_line)
             outline = _write_phrasetable_file(prev_line)
             output_object.write(outline)
         sys.stderr.write("Done\n")
@@ -546,7 +566,6 @@ class Merge_TM():
         # lexical weight
         #TODO: pay attention to the change from lex1 to lex2
         line[2][1],line[2][3] = self.moses_interface._compute_lexical_weight(line[0],line[1],line[3])
-
         return line
 
 
@@ -1012,7 +1031,7 @@ def sort_file_fix(filename,newname,tempdir=None):
         cmd.extend(['-T',tempdir])
 
     #outfile = NamedTemporaryFile(delete=False,dir=tempdir)
-    outfile=open("{0}/{1}".format(tempdir,newname),mode='w')
+    outfile=open(os.path.normpath("{0}/{1}".format(tempdir,newname)),mode='wb')
     sys.stderr.write('LC_ALL=C ' + ' '.join(cmd) + ' > ' + outfile.name + '\n')
     p = Popen(cmd,env=env,stdout=outfile)
     p.wait()
@@ -1125,6 +1144,7 @@ if __name__ == "__main__":
     else:
         args = parse_command_line()
         #initialize
+        sys.stderr.write("\n------ PHRASE 1: WRITING DRAFT PHRASE TABLE ------- \n")
         combiner = Triangulate_TMs(weights=args.weights,
                                model1=args.srcpvt,
                                model2=args.pvttgt,
@@ -1148,12 +1168,10 @@ if __name__ == "__main__":
 
         # write everything to a file
         combiner.combine_standard()
-        # sort the file
-        tmpfile = sort_file(combiner.output_file,tempdir=args.tempdir2)
-        sys.stderr.write("Remove the unsorted phrase table {0}\n".format(combiner.output_file))
-        os.remove(combiner.output_file)
+        sys.stderr.write("\n------ PHRASE 2: OUTPUT THE FINAL PHRASE TABLE ------- \n")
+
         # combine the new file
-        merger = Merge_TM(model=tmpfile,
+        merger = Merge_TM(model=combiner.output_file,
                           output_file=args.output,
                           mode=combiner.mode,
                           action=args.action,
