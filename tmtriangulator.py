@@ -487,7 +487,7 @@ class Merge_TM():
         count = 0
 
         # keep the prev_line in memory until it break prev_line[0]
-        for line,phrase_count_f,phrase_count_e in zip(self.model,self.phrase_count_f,self.phrase_count_e):
+        for line,phrase_count_f,phrase_count_e in izip(self.model,self.phrase_count_f,self.phrase_count_e):
             if not count%1000000:
                 sys.stderr.write(str(count)+'...')
             count+=1
@@ -508,6 +508,7 @@ class Merge_TM():
                     prev_line = self._combine_lines(prev_line, line)
                     continue
                 else:
+                    prev_line = self._recompute_features(prev_line)
                     # when you get out of the identical blog, start writing
                     outline = _write_phrasetable_file(prev_line)
                     output_object.write(outline)
@@ -516,6 +517,7 @@ class Merge_TM():
                 # the first position
                 prev_line = line
         if (len(prev_line)):
+            prev_line = self._recompute_features(prev_line)
             outline = _write_phrasetable_file(prev_line)
             output_object.write(outline)
         sys.stderr.write("Done\n")
@@ -570,10 +572,12 @@ class Merge_TM():
         Summing up the probability
         Get the unification of alignment
         Get the sum of counts
+
         '''
-        # probability
+        #TODO: reviews it
         for i in range(4):
             prev_line[2][i] += cur_line[2][i]
+            prev_line[2][i] = min(prev_line[2][i], 1.0)
         # alignment
         alignment = []
         for pair in prev_line[3]+cur_line[3]:
