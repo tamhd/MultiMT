@@ -797,6 +797,8 @@ class Triangulate_TMs():
             if not count%1000000:
                 sys.stderr.write(str(count)+'...')
             count+=1
+
+            # handle if the matching is found
             if (self.phrase_match[0]):
                 if (line1 and line1[0] == self.phrase_match[0]):
                     self.phrase_match[1].append(line1)
@@ -809,14 +811,14 @@ class Triangulate_TMs():
                 else:
                     self._combine_and_write(output_object,output_tgt,output_src)
 
-            # handle if the matching is found
+            # handle end of file
             if (not line1 or not line2):
                 #self.phrase_match = defaultdict(lambda: []*3)
                 self._combine_and_write(output_object,output_tgt,output_src)
                 sys.stderr.write("Finish loading\n")
                 return None
 
-            # handle if the machine is not found
+            # handle if the maching is not found
             if (not self.phrase_match[0]):
                 if (line1[0] == line2[0]):
                     self.phrase_match[0] = line1[0]
