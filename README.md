@@ -2,7 +2,8 @@
 MultiMT
 ------
 
-From a source to a target via multiple pivots
+
+tmtriangulator - a tool for phrase-table triangulation 
 
 -- Branch tmCreator is to create phrase tables from available corpora (assumed that we have tokenized and aligned data)
 
@@ -10,6 +11,14 @@ From a source to a target via multiple pivots
 
 ABOUT
 -----
+
+This program handles the triangulation of Moses phrase tables, with 6 different options. 
+
+WHY
+---
+
+Phrase table triangulation is one of the main pivoting methods, which 
+
 
 This program handles the way to translate from one language to another via multiple languages in the middle. It involves either the approaches to triangulation and the management techniques towards available resources.
 
