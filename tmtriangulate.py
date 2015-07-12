@@ -70,10 +70,6 @@ def parse_command_line():
                     choices=['minimum',"maximum","arithmetic-mean",'geometric-mean'],
                     help='choose to measures the co-occurrences if the action is counts_based, you have 4 options: minimum, maximum, arithmetic mean and geometric mean')
 
-    group1.add_argument('-r', '--reference', type=str,
-                    default=None,
-                    help='File containing reference phrase pairs for cross-entropy calculation. Default interface expects \'path/model/extract.gz\' that is produced by training a model on the reference (i.e. development) corpus.')
-
     group1.add_argument('-o', '--output', type=str,
                     default="-",
                     help='Output file (phrase table). If not specified, model is written to standard output.')
@@ -92,11 +88,6 @@ def parse_command_line():
     group2.add_argument('--number_of_features', type=int,
                     default=4, metavar='N',
                     help=('Combine models with N + 1 features (last feature is constant phrase penalty). (default: %(default)s)'))
-
-
-    group3.add_argument('--command', '--./tmtriangulate.py features_based -ps model1 -pt model2 -o output_phrasetable -t tempdir', action="store_true",
-                    help=('If you wish to run the naive approach, the command above would work, in which: model1 = pivot-source model, model2 = pivot-target model'))
-
 
     return parser.parse_args()
 
@@ -374,13 +365,9 @@ def _glob_process_lexical_count_e(phrasefile,tempdir=None):
 # Section 4: Merge identical phrase pairs in the duplicate ttable
 # --------------------------------------------------------------------------
 class Merge_TM():
-    """This class take input as one noisy phrase table in which it consists of so many repeated lines.
-       The output of this class should be one final clean phrase table
-
-       The tasks which have to be done are:
-        + Merge TM by summing them up
-        + Merge TM by taking the maximum
-        + Merge TM by co-occurrence
+    """ This class takes the triangulated phrase table as the input and merges
+        identical phrase pairs together.
+        The output of this class is one final clean phrase table
     """
     def __init__(self,model=None,
                       output_file=None,
@@ -391,9 +378,7 @@ class Merge_TM():
                       action="features_based",
                       moses_interface=None,
                       weight='summation',
-                      tempdir=None
-                      ):
-
+                      tempdir=None):
         self.mode = mode
         self.model = model # the model file
         self.output_file = output_file
@@ -433,7 +418,7 @@ class Merge_TM():
         merge multiple sentence into one
         '''
         prev_line = []
-        sys.stderr.write("\nCombine Multiple lines by option: " + self.action + "\n")
+        sys.stderr.write("\nMerging phrase table with option: " + self.action + "\n")
         output_object = handle_file(self.output_file,'open',mode='w')
         sys.stderr.write("Start merging multiple lines ...")
         self._line_traversal = self._parallel_traversal
@@ -449,18 +434,17 @@ class Merge_TM():
             self._combine_lines = self._combine_occ
             self._recompute_features = self._recompute_features_occ
         else:
-            # by default, let say we take the cooccurrences and min
-            self._combine_lines = self._combine_occ
-            self._recompute_features = self._recompute_features_occ
+            # by default, let say we take the features_based and min
+            self._combine_lines = self._combine_sum
+            self._recompute_features = self._recompute_features_Cohn
         self._line_traversal(flag,prev_line,output_object)
         handle_file(self.output_file,'close',output_object,mode='w')
 
     def _parallel_traversal(self,flag=False,prev_line=None,output_object=None):
-        ''' Traver through the phrase-table and the phrase compact file to compute the final file
+        ''' Travel through the phrase-table and the phrase compact files simultaneously
+            The features of new ttable are computed on the fly
         '''
         count = 0
-
-        # keep the prev_line in memory until it break prev_line[0]
         for line,phrase_count_f,phrase_count_e in izip(self.model,self.phrase_count_f,self.phrase_count_e):
             if not count%1000000:
                 sys.stderr.write(str(count)+'...')
@@ -497,20 +481,20 @@ class Merge_TM():
         sys.stderr.write("Done\n")
 
     def _recompute_features_Cohn(self,line):
-        ''' Do nothing :)
+        ''' The features have already been estimated in the previous step
         '''
         return line
 
     def _recompute_features_occ(self,line):
         '''
-        Compute the value of a single according to the co-occurrence
-        format: src ||| tgt ||| prob1 lex1 prob2 lex2 ||| align ||| c_t c_s c_s_t ||| |||
+        Estimate the features based on the co-occurrence counts
+        Format: src ||| tgt ||| prob1 lex1 prob2 lex2 ||| align ||| c_t c_s c_s_t ||| |||
         '''
         coocc = float(line[4][2])
         count_s = line[4][1]
         count_t = line[4][0]
 
-        # probability
+        # translation probabilities
         if (coocc == 0 and count_t == 0):
             line[2][0] = 0
         else:
@@ -519,8 +503,8 @@ class Merge_TM():
             line[2][2] = 0
         else:
             line[2][2] = coocc/count_s # p(t|s)
-        # lexical weight
-        #TODO: pay attention to the change from lex1 to lex2
+
+        # lexical probabilities
         line[2][1],line[2][3] = self.moses_interface._compute_lexical_weight(line[0],line[1],line[3])
 
         return line
@@ -528,8 +512,7 @@ class Merge_TM():
 
     def _combine_occ(self,prev_line=None,cur_line=None):
         '''
-        Calculate the value of combine occ by the co-occurrence
-        rather than the probabilities
+        Combine the co-occurrence counts of multiple phrase pairs
         '''
         # alignment
         alignment = []
@@ -543,12 +526,11 @@ class Merge_TM():
 
     def _combine_sum(self,prev_line=None,cur_line=None):
         '''
-        Summing up the probability
-        Get the unification of alignment
-        Get the sum of counts
-
+        Summation of probabilities
+        Unification of alignment
+        Summation of co-occurrence counts
         '''
-        #TODO: reviews it
+        # features
         for i in range(4):
             prev_line[2][i] += cur_line[2][i]
             prev_line[2][i] = min(prev_line[2][i], 1.0)
@@ -567,11 +549,11 @@ class Merge_TM():
 
     def _combine_max(self,prev_line=None,cur_line=None):
         '''
-        Get the maximum the probability
-        Get the unification of alignment
-        Get the sum of counts
+        Maximazition of probabilities
+        Unification of alignment
+        Summation of counts
         '''
-        # probability
+        # features
         for i in range(4):
             prev_line[2][i] = max(prev_line[2][i], cur_line[2][i])
         # alignment
@@ -648,9 +630,7 @@ class Triangulate_TMs():
     def triangulate_standard(self,weight=None):
         ''' Triangulating two phrase tables and writing a temporary output file
         '''
-
-
-        """write a new phrase table, based on existing weights of two other tables
+        """write a new phrase table based on existing weights of two other tables
            #NOTE: Indeed, all processes start here"""
 
         #1: formulate the input to pst mode
@@ -1001,7 +981,7 @@ def _load_line(line):
         try:
             s,t = pair.split(b'-')
             s,t = int(s),int(t)
-            phrase_align.append((s,t))
+            phrase_align.append([s,t])
         except:
             pass
     line[3] = phrase_align
