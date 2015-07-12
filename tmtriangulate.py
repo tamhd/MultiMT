@@ -1,19 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# ./tmtriangulate.py features_based -ps test/model1 -pt test/model2 -o test/phrase-table_sample -t tempdir
-#  This class implement a naive method for triangulation: nothing
-#  The most important part of this method is to initialize variables
 
-#TODO: It's still triangulation but not naive anymore
-#Compute the data based solely on the co-occurrences, but keep the probability in case of emergency
-# ref: /a/merkur3/thoang/eman/ufal-smt-playground/multi_playground/s.mosesgiza.f282bc2e.20140906-1739/moses/scripts/training/LexicalTranslationModel.pm get_lexical_counts
-#TODO: Cope with the problem of NULL pointer
-#TODO: Cope with the problem of overloading memory
-#TODO: Cope with the problem of overloading hard drive, stop writing the src phrase count and remove the used file
-#TODO: Cope with the problem of time constrains, parallelism
-#TODO: July 10: polishing the source
-#TODO: July 10: another option to compute the new features, keeping the counts from source phrase table
-#TODO: After July 10: Balancing size of phrase table
+# July 2015: Polishing the source codes
+# March 2015: Design 'counts_based': recomputing the co-occurrence counts
+#      Improving Pivot-Based Statistical Machine Translation by Pivoting the Co-occurrence Count of Phrase Pairs - Zhu and He et al 2014
+# Jan 2015: Design 'features_based': estimating features based on posterior features
+# Dec 14, 2014: Initialization and Naive approach.
+# Before Dec 2014: The author was too lazy to use GitHub, no revision control.
 
 from __future__ import division, unicode_literals
 import sys
