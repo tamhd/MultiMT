@@ -26,20 +26,18 @@ from math import log, exp, sqrt
 from collections import defaultdict
 from operator import mul
 from tempfile import NamedTemporaryFile
-#from tmcombine import Moses, Moses_Alignment, to_list
 from subprocess import Popen
 from multiprocessing import Pool,Value,Process
 from datetime import datetime
-
-# set the locale
-#import locale
-#locale.setlocale(locale.LC_ALL, "C")
 
 try:
     from itertools import izip
 except:
     izip = zip
 
+# --------------------------------------------------------------------------
+# Section 1: The command parser
+# --------------------------------------------------------------------------
 def parse_command_line():
 
     parser = argparse.ArgumentParser(description="Combine translation models. Check DOCSTRING of the class Triangulate_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples")
@@ -102,8 +100,9 @@ def parse_command_line():
 
     return parser.parse_args()
 
-
-# Configuration of Moses class
+# --------------------------------------------------------------------------
+# Section 2: A moses class to keep track of word counts and alignments
+# --------------------------------------------------------------------------
 class Moses:
     ''' Moses interface for loading/writing models
         It keeps the value of src-pvt word count
@@ -267,8 +266,9 @@ class Moses:
 
 
 
-# A set of global functions to support the usage of multi-threading
-
+# --------------------------------------------------------------------------
+# Section 3: A set of global functions to suppport multi-threading
+# --------------------------------------------------------------------------
 def _glob_get_lexical(word_pairs_e2f,word_count_e,word_count_f,path,bridge,flag=0):
     ''' write the  lexical file
             named after: LexicalTranslationModel.pm->get_lexical
@@ -370,7 +370,9 @@ def _glob_process_lexical_count_e(phrasefile,tempdir=None):
     phrasefile.seek(0)
     return 1
 
-#merge the noisy phrase table
+# --------------------------------------------------------------------------
+# Section 4: Merge identical phrase pairs in the duplicate ttable
+# --------------------------------------------------------------------------
 class Merge_TM():
     """This class take input as one noisy phrase table in which it consists of so many repeated lines.
        The output of this class should be one final clean phrase table
@@ -586,6 +588,10 @@ class Merge_TM():
             prev_line[4][2] += cur_line[4][2]
         return prev_line
 
+
+# --------------------------------------------------------------------------
+# Section 5: Triangulate src-pvt and pvt-tgt phrase tables
+# --------------------------------------------------------------------------
 class Triangulate_TMs():
     """This class handles the various options, checks them for sanity and has methods that define what models to load and what functions to call for the different tasks.
        Typically, you only need to interact with this class and its attributes.
@@ -873,9 +879,12 @@ class Triangulate_TMs():
             raise TypeError("Wrong format of co-occurrence counts")
         return word_count
 
-
+# --------------------------------------------------------------------------
+# Section 6: Global functions
+# --------------------------------------------------------------------------
 def handle_file(filename,action,fileobj=None,mode='r'):
-    """support reading/writing either from/to file, stdout or gzipped file"""
+    """ Read/write from/to file
+    """
 
     if action == 'open':
 
@@ -912,7 +921,8 @@ def handle_file(filename,action,fileobj=None,mode='r'):
 
 
 def sort_file(filename,tempdir=None):
-    """Sort a file and return temporary file"""
+    """ Sort a file and return temporary file
+    """
 
     cmd = ['sort', filename]
     env = {}
@@ -930,7 +940,8 @@ def sort_file(filename,tempdir=None):
     return outfile
 
 def sort_file_fix(filename,newname,tempdir=None):
-    """Sort a file and return temporary file with fix name"""
+    """ Sort a file and return temporary file with fix name
+    """
 
     cmd = ['sort', filename]
     env = {}
@@ -938,7 +949,6 @@ def sort_file_fix(filename,newname,tempdir=None):
     if tempdir:
         cmd.extend(['-T',tempdir])
 
-    #outfile = NamedTemporaryFile(delete=False,dir=tempdir)
     outfile=open("{0}/{1}".format(tempdir,newname),mode='w')
     sys.stderr.write('LC_ALL=C ' + ' '.join(cmd) + ' > ' + outfile.name + '\n')
     p = Popen(cmd,env=env,stdout=outfile)
@@ -948,36 +958,22 @@ def sort_file_fix(filename,newname,tempdir=None):
 
     return outfile
 
-
-
-def dot_product(a,b):
-    """calculate dot product from two lists"""
-
-    # optimized for PyPy (much faster than enumerate/map)
-    s = 0
-    i = 0
-    for x in a:
-        s += x * b[i]
-        i += 1
-
-    return s
-
 def get_minimum_counts(count1, count2):
-    ''' get the mimimum occurrences between two occurrences
+    ''' Get the mimimum of two values
     '''
     return min(count1,count2)
 
 def get_maximum_counts(count1, count2):
-    ''' get the maximum occurrences between two occurrences
+    ''' Get the maximum of two values
     '''
     return max(count1,count2)
 
 def get_arithmetic_mean(count1, count2):
-    ''' get arithmetic mean between two numbers
+    ''' Get the arithmetic mean of two values
     '''
     return (count1+count2)/2
 def get_geometric_mean(count1, count2):
-    ''' get the geometric mean between two numbers
+    ''' Get the geometric mean of two values
     '''
     return sqrt(count1*count2)
 
@@ -992,15 +988,14 @@ def _load_line(line):
         line[-1] = line[-1][:-4]
         line.append(b'')
 
-    # remove the blank space
+    # remove blank spaces
     line[0] = line[0].strip()
     line[1] = line[1].strip()
 
-    # break the probability
+    # probabilities
     line[2]  = [float(i) for i in line[2].strip().split(b' ')]
 
-    # break the alignment
-    #TODO: Keep the alignment structure: [(1,1),(1,3),(2,3)]
+    # alignment
     phrase_align = []
     for pair in line[3].strip().split(b' '):
         try:
@@ -1010,15 +1005,16 @@ def _load_line(line):
         except:
             pass
     line[3] = phrase_align
+
+    # occurrence counts
     line[4] = [long(float(i)) for i in line[4].strip().split(b' ')]
     if len(line[4]) < 2:
-        sys.exit("the number of values in counting is not enough")
+        raise TypeError("The number of values in counting is not enough\n")
 
     return line
 
 def _write_phrasetable_file(line):
-    '''
-    write the phrase table line
+    ''' Write lines of the phrase table
     '''
     # convert data to appropriate format
     # probability
@@ -1038,7 +1034,9 @@ def _write_phrasetable_file(line):
     outline = b"%s ||| %s ||| %s ||| %s%s||| %s ||| |||\n" %(src,tgt,features,alignments,extra_space,word_counts)
     return outline
 
-
+# --------------------------------------------------------------------------
+# Section 0: Main function
+# --------------------------------------------------------------------------
 if __name__ == "__main__":
 
     if len(sys.argv) < 2:
