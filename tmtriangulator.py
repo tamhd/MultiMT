@@ -526,6 +526,7 @@ class Merge_TM():
                     prev_line = self._combine_lines(prev_line, line)
                     continue
                 else:
+                    prev_line = self._recompute_features(prev_line)
                     # when you get out of the identical blog, start writing
                     prev_line = self._recompute_features(prev_line)
                     outline = _write_phrasetable_file(prev_line)
@@ -589,10 +590,12 @@ class Merge_TM():
         Summing up the probability
         Get the unification of alignment
         Get the sum of counts
+
         '''
-        # probability
+        #TODO: reviews it
         for i in range(4):
             prev_line[2][i] += cur_line[2][i]
+            prev_line[2][i] = min(prev_line[2][i], 1.0)
         # alignment
         alignment = []
         for pair in prev_line[3]+cur_line[3]:
@@ -812,6 +815,8 @@ class Triangulate_TMs():
             if not count%1000000:
                 sys.stderr.write(str(count)+'...')
             count+=1
+
+            # handle if the matching is found
             if (self.phrase_match[0]):
                 if (line1 and line1[0] == self.phrase_match[0]):
                     self.phrase_match[1].append(line1)
@@ -824,14 +829,14 @@ class Triangulate_TMs():
                 else:
                     self._combine_and_write(output_object,output_tgt,output_src)
 
-            # handle if the matching is found
+            # handle end of file
             if (not line1 or not line2):
                 #self.phrase_match = defaultdict(lambda: []*3)
                 self._combine_and_write(output_object,output_tgt,output_src)
                 sys.stderr.write("Finish loading\n")
                 return None
 
-            # handle if the machine is not found
+            # handle if the maching is not found
             if (not self.phrase_match[0]):
                 if (line1[0] == line2[0]):
                     self.phrase_match[0] = line1[0]
