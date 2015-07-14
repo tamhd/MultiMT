@@ -9,40 +9,46 @@ tmtriangulator - a tool for phrase-table triangulation
 
 < Tam Hoang >
 
-ABOUT
------
+##### ABOUT
 
 This program handles the triangulation of Moses phrase tables, with 6 different options. 
 
-WHY
----
+##### WHY
 
 Phrase table triangulation is one of the main pivoting methods, which 
 
-
 This program handles the way to translate from one language to another via multiple languages in the middle. It involves either the approaches to triangulation and the management techniques towards available resources.
 
-REQUIREMENTS
-------------
+##### REQUIREMENTS
 
-The script requires Python >= 2.6.
+The script requires Python >= 2.6. That's it, nothing more.
 
+##### USAGE
 
-USAGE
------
+TmTriangulate basically merges two phrase tables into one phrase table.
 
-The project is not a singled-system (yet) but a set of scripts: 'tmtriangulate.py' - building a final phrase table from two other phrase tables, 'resources\_decode.py' - finding the best way to ultilize the available resources.
+A command example: ./tmtriangulate.py features\_based -s test/model1 -t test/model1
 
-For usage details, run ./tmtriangulate.py -h
+This command triangulate model1 with itself, following the approach of Cohn
 
-For example: ./tmtriangulate.py combine\_given\_weights -ps model1 -pt model2 -o final-phrasetable -i none -t tempdir
+The basic command line: ./tmtriangulate.py [action] -s source-phrase-table -t target-phrase-table
 
-There are three actions are provided : compute\_by\_occurrences, combine\_given\_weights and maximize\_given\_weights. 
-The first scores a pair src-tgt by the new co-occurrences (default: minimum)
-The second scores a pair src-tgt by all the possible ways to translate src to a pvt phrase then to tgt. 
-The third scores a pair src-tgt by the best pvt phrase which bears the same meaning.
+Until now, you can use two actions:
 
-FURTHER NOTES
--------------
+* features\_based: Estimating new features from the posterior features. 
+
+* counts\_based: Re-estimating the co-occurrence counts
+
+Each action is set to default with its best parameters. Typically, you have to specify a few parameters:
+
+* mode (-m): accepts \'pst\' and \'spt\', indicating the input as source-pivot phrase table or pivot-source phrase table
+
+* computation (-co): specifies the scenario to triangulate the co-occurrence counts
+
+* weight (-w): specifies the scenario to combine weights of identical phrase pairs
+
+For further usage information, run ./tmcombine.py -h
+
+##### FURTHER NOTES
 
 This project is under development! 
