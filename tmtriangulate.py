@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # July 2015: Polishing the source codes
-# March 2015: Design 'counts_based': recomputing the co-occurrence counts
+# Feb 2015: Design 'counts_based': recomputing the co-occurrence counts
 #      Improving Pivot-Based Statistical Machine Translation by Pivoting the Co-occurrence Count of Phrase Pairs - Zhu and He et al 2014
 # Jan 2015: Design 'features_based': estimating features based on posterior features
 # Dec 14, 2014: Initialization and Naive approach.
