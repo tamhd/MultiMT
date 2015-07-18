@@ -2,12 +2,9 @@
 MultiMT
 ------
 
+This is a project for translating one language to another language, with the support of a thid language(s).
 
-tmtriangulator - a tool for phrase-table triangulation 
-
--- Branch tmCreator is to create phrase tables from available corpora (assumed that we have tokenized and aligned data)
-
-< Tam Hoang >
+The first, and the most center to the project is tmtriangulate - a tool for phrase-table triangulation 
 
 ##### ABOUT
 
@@ -52,3 +49,7 @@ For further usage information, run ./tmcombine.py -h
 ##### FURTHER NOTES
 
 This project is under development! 
+
+Author: Tam Hoang, Ondrej Bojar
+
+If you have any comments, questions or suggestions, even jokes, feel free to send me an email at tamhd1990@gmail.com
