@@ -3,18 +3,13 @@ MultiMT
 ------
 
 This is a project for translating one language to another language, with the support of a thid language(s).
+This program handles the way to translate from one language to another via multiple languages in the middle. It involves either the approaches to triangulation and the management techniques towards available resources.
 
-The first, and the most center to the project is tmtriangulate - a tool for phrase-table triangulation 
+The first, and the most center to the project, is tmtriangulate - a tool for phrase-table triangulation 
 
 ##### ABOUT
 
 This program handles the triangulation of Moses phrase tables, with 6 different options. 
-
-##### WHY
-
-Phrase table triangulation is one of the main pivoting methods, which 
-
-This program handles the way to translate from one language to another via multiple languages in the middle. It involves either the approaches to triangulation and the management techniques towards available resources.
 
 ##### REQUIREMENTS
 
