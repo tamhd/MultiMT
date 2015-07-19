@@ -107,7 +107,6 @@ class Moses:
         '''
         compute the lexical weight in phrase table based on the co-occurrence of word count
         '''
-        #TODO: This implementation is wrong, should I keep all the count in memory
         align_rev = defaultdict(lambda: [])
         alignment=defaultdict(lambda:[])
 
@@ -141,11 +140,9 @@ class Moses:
 
         return lex_st, lex_ts
 
-    #TODO: write the general lexical functions (both probability and count) instead of two functions
     #TODO: for the sake of parallelism, rewrite following functions to standards
     def _get_lexical(self,path,bridge,flag):
         ''' write the  lexical file
-            named after: LexicalTranslationModel.pm->get_lexical
         '''
         sys.stderr.write("\nWrite the lexical files ")
         output_lex_prob_e2f = handle_file("{0}{1}.{2}".format(path,bridge,'e2f'), 'open', mode='w')
@@ -169,14 +166,13 @@ class Moses:
         handle_file("{0}{1}.{2}".format(path,bridge,'e2f'),'close',output_lex_prob_e2f,mode='w')
         handle_file("{0}{1}.{2}".format(path,bridge,'f2e'),'close',output_lex_prob_f2e,mode='w')
         if flag == 1:
-            print "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
             handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'),'close',output_lex_count_e2f,mode='w')
             handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'),'close',output_lex_count_f2e,mode='w')
         sys.stderr.write("Done\n")
 
     def _process_lexical_count_f(self,tempdir=None):
         ''' compute the count of target phrase, then write them down in format: src ||| tgt ||| count
-            then sort the new file
+            sort the new file
         '''
         sys.stderr.write("\nProcess lexical count target: ")
         outsrc_file = "{0}/{1}.{2}".format(tempdir,"lexical_count","fe2f")
@@ -215,7 +211,7 @@ class Moses:
 
     def _process_lexical_count_e(self,phrasefile,tempdir=None):
         ''' compute the count of source phrase, then write them down in the same format: src ||| tgt ||| count
-            then sort the new file
+            sort the new file
         '''
         sys.stderr.write("Process lexical count source: ")
         outsrc_file = "{0}/{1}.{2}".format(tempdir,"lexical_count","ee2f")
@@ -255,34 +251,30 @@ class Moses:
 # Section 3: A set of global functions to suppport multi-threading
 # --------------------------------------------------------------------------
 def _glob_get_lexical(word_pairs_e2f,word_count_e,word_count_f,path,bridge,flag):
-    print flag
-    print ".........................."
-    ''' write the  lexical file
-            named after: LexicalTranslationModel.pm->get_lexical
+    ''' global function to write the  lexical file
     '''
     sys.stderr.write("\nWrite the lexical files ")
-    output_lex_prob_e2f = handle_file("{0}{1}.{2}".format(path,bridge,'e2f'), 'open', mode='w')
-    output_lex_prob_f2e = handle_file("{0}{1}.{2}".format(path,bridge,'f2e'), 'open', mode='w')
-    if flag == 1:
-        output_lex_count_e2f = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'), 'open', mode='w')
-        output_lex_count_f2e = handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'), 'open', mode='w')
+    bridge=flag
+    if flag:
+        output_lex_prob_e2f = handle_file("{0}/{1}.{2}".format(path,bridge,'e2f'), 'open', mode='w')
+        output_lex_prob_f2e = handle_file("{0}/{1}.{2}".format(path,bridge,'f2e'), 'open', mode='w')
+        output_lex_count_e2f = handle_file("{0}/{1}.{2}.{3}".format(path,bridge,"count",'e2f'), 'open', mode='w')
+        output_lex_count_f2e = handle_file("{0}/{1}.{2}.{3}".format(path,bridge,"count",'f2e'), 'open', mode='w')
 
-    count = 0
-    for e,tgt_hash in word_pairs_e2f.iteritems():
-        for f,val in tgt_hash.iteritems():
-            if not count%100000:
-                sys.stderr.write(str(count)+'...')
-            count+=1
-            if flag == 1:
+        count = 0
+        for e,tgt_hash in word_pairs_e2f.iteritems():
+            for f,val in tgt_hash.iteritems():
+                if not count%100000:
+                    sys.stderr.write(str(count)+'...')
+                count+=1
                 output_lex_count_e2f.write(b"%s %s %d %d\n" %(f,e,val,word_count_e[e]))
                 output_lex_count_f2e.write(b"%s %s %d %d\n" %(e,f,val,word_count_f[f]))
-            output_lex_prob_e2f.write(b"%s %s %.7f\n" %(f,e,float(val)/word_count_e[e]))
-            output_lex_prob_f2e.write(b"%s %s %.7f\n" %(e,f,float(val)/word_count_f[f]))
+                output_lex_prob_e2f.write(b"%s %s %.7f\n" %(f,e,float(val)/word_count_e[e]))
+                output_lex_prob_f2e.write(b"%s %s %.7f\n" %(e,f,float(val)/word_count_f[f]))
 
     handle_file("{0}{1}.{2}".format(path,bridge,'e2f'),'close',output_lex_prob_e2f,mode='w')
     handle_file("{0}{1}.{2}".format(path,bridge,'f2e'),'close',output_lex_prob_f2e,mode='w')
     if flag == 1:
-        print "XXXXXXXXXXXXXXXXXXXXX"
         handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'),'close',output_lex_count_e2f,mode='w')
         handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'),'close',output_lex_count_f2e,mode='w')
     sys.stderr.write("Done\n")
@@ -290,7 +282,7 @@ def _glob_get_lexical(word_pairs_e2f,word_count_e,word_count_f,path,bridge,flag)
 
 def _glob_process_lexical_count_f(phrase_count_f,tempdir=None):
     ''' compute the count of target phrase, then write them down in format: src ||| tgt ||| count
-            then sort the new file
+        sort the new file
     '''
     sys.stderr.write("\nProcess lexical count target: ")
     outsrc_file = "{0}/{1}.{2}".format(tempdir,"lexical_count","fe2f")
@@ -327,7 +319,7 @@ def _glob_process_lexical_count_f(phrase_count_f,tempdir=None):
 
 def _glob_process_lexical_count_e(phrasefile,tempdir=None):
     ''' compute the count of source phrase, then write them down in the same format: src ||| tgt ||| count
-            then sort the new file
+        sort the new file
     '''
     sys.stderr.write("Process lexical count source: ")
     outsrc_file = "{0}/{1}.{2}".format(tempdir,"phrase_count","e")
@@ -382,18 +374,17 @@ class Merge_TM():
         self.lang_src = lang_src
         self.lang_target = lang_target
         self.loaded = defaultdict(int)
-        self.output_lexical = int(output_lexical)
+        self.output_lexical = output_lexical
         self.action=action
         self.moses_interface=moses_interface
         self.weight=weight
         self.tempdir=tempdir
 
-        print "OUTPUT LEXICLA " + output_lexical
         # Parallelism, hack-ish way to run parallel
         # Damn python
         pool = Pool(processes=3)
         # get the path
-        bridge = os.path.basename(self.output_file).replace("phrase-table","/lex").replace(".gz", "") # create the lexical associated with phrase table
+        bridge = "/lex" + os.path.basename(self.output_file).replace("phrase-table","").replace(".gz", "") # create the lexical associated with phrase table
         #self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge,flag=0)
         lexc = Process(target=_glob_get_lexical, args=[self.moses_interface.word_pairs_e2f,self.moses_interface.word_count_e,self.moses_interface.word_count_f,os.path.dirname(os.path.realpath(self.output_file)), bridge,self.output_lexical])
         # handle the phrase count

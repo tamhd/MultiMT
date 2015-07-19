@@ -1,0 +1,7 @@
+_T=20150710_23:21:34_24188	 mv phrase-table phrase-table-full
+_T=20150710_23:21:44_24188	 cat phrase-table-full | tail -20000 > phrase-table
+_T=20150710_23:31:55_17149	 ls
+_T=20150710_23:45:42_17149	 less phrase-table
+_T=20150719_22:12:20_9384	 ls
+_T=20150719_22:12:24_9384	 rm phrase-tab
+_T=20150719_22:12:26_9384	 rm phrase-table-full
