@@ -67,12 +67,12 @@ def parse_command_line():
                     default="-",
                     help='Output file (phrase table). If not specified, model is written to standard output.')
 
-    group1.add_argument('--output-lexical', type=str,
+    group1.add_argument('-l', '--output-lexical', dest='outlex', type=str,
                     default=None,
                     help=('Not only create a combined phrase table, but also combined lexical tables. Writes to OUTPUT_LEXICAL.e2f and OUTPUT_LEXICAL.f2e, or OUTPUT_LEXICAL.counts.e2f in mode \'counts\'.'))
 
-    group1.add_argument('-tmp', '--tmpdir', dest='tmp', type=str,
-                    default=None,
+    group1.add_argument('-tmpdir', '--tmpdir', dest='tmp', type=str,
+                    default=".",
                     help=('Temporary directory to put the intermediate phrase'))
 
     group2.add_argument('--write-phrase-penalty', action="store_true",
@@ -143,7 +143,7 @@ class Moses:
 
     #TODO: write the general lexical functions (both probability and count) instead of two functions
     #TODO: for the sake of parallelism, rewrite following functions to standards
-    def _get_lexical(self,path,bridge,flag=0):
+    def _get_lexical(self,path,bridge,flag):
         ''' write the  lexical file
             named after: LexicalTranslationModel.pm->get_lexical
         '''
@@ -160,7 +160,7 @@ class Moses:
                 if not count%100000:
                     sys.stderr.write(str(count)+'...')
                 count+=1
-                if flag == 1:
+                if flag:
                     output_lex_count_e2f.write(b"%s %s %d %d\n" %(f,e,val,self.word_count_e[e]))
                     output_lex_count_f2e.write(b"%s %s %d %d\n" %(e,f,val,self.word_count_f[f]))
                 output_lex_prob_e2f.write(b"%s %s %.7f\n" %(f,e,float(val)/self.word_count_e[e]))
@@ -169,6 +169,7 @@ class Moses:
         handle_file("{0}{1}.{2}".format(path,bridge,'e2f'),'close',output_lex_prob_e2f,mode='w')
         handle_file("{0}{1}.{2}".format(path,bridge,'f2e'),'close',output_lex_prob_f2e,mode='w')
         if flag == 1:
+            print "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
             handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'),'close',output_lex_count_e2f,mode='w')
             handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'),'close',output_lex_count_f2e,mode='w')
         sys.stderr.write("Done\n")
@@ -253,7 +254,9 @@ class Moses:
 # --------------------------------------------------------------------------
 # Section 3: A set of global functions to suppport multi-threading
 # --------------------------------------------------------------------------
-def _glob_get_lexical(word_pairs_e2f,word_count_e,word_count_f,path,bridge,flag=0):
+def _glob_get_lexical(word_pairs_e2f,word_count_e,word_count_f,path,bridge,flag):
+    print flag
+    print ".........................."
     ''' write the  lexical file
             named after: LexicalTranslationModel.pm->get_lexical
     '''
@@ -279,6 +282,7 @@ def _glob_get_lexical(word_pairs_e2f,word_count_e,word_count_f,path,bridge,flag=
     handle_file("{0}{1}.{2}".format(path,bridge,'e2f'),'close',output_lex_prob_e2f,mode='w')
     handle_file("{0}{1}.{2}".format(path,bridge,'f2e'),'close',output_lex_prob_f2e,mode='w')
     if flag == 1:
+        print "XXXXXXXXXXXXXXXXXXXXX"
         handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'),'close',output_lex_count_e2f,mode='w')
         handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'),'close',output_lex_count_f2e,mode='w')
     sys.stderr.write("Done\n")
@@ -378,18 +382,20 @@ class Merge_TM():
         self.lang_src = lang_src
         self.lang_target = lang_target
         self.loaded = defaultdict(int)
-        self.output_lexical = output_lexical
+        self.output_lexical = int(output_lexical)
         self.action=action
         self.moses_interface=moses_interface
         self.weight=weight
         self.tempdir=tempdir
+
+        print "OUTPUT LEXICLA " + output_lexical
         # Parallelism, hack-ish way to run parallel
         # Damn python
         pool = Pool(processes=3)
         # get the path
         bridge = os.path.basename(self.output_file).replace("phrase-table","/lex").replace(".gz", "") # create the lexical associated with phrase table
         #self.moses_interface._get_lexical(os.path.dirname(os.path.realpath(self.output_file)), bridge,flag=0)
-        lexc = Process(target=_glob_get_lexical, args=[self.moses_interface.word_pairs_e2f,self.moses_interface.word_count_e,self.moses_interface.word_count_f,os.path.dirname(os.path.realpath(self.output_file)), bridge,0])
+        lexc = Process(target=_glob_get_lexical, args=[self.moses_interface.word_pairs_e2f,self.moses_interface.word_count_e,self.moses_interface.word_count_f,os.path.dirname(os.path.realpath(self.output_file)), bridge,self.output_lexical])
         # handle the phrase count
         #self.phrase_count_f = self.moses_interface._process_lexical_count_f(tempdir=self.tempdir)
         lexf = Process(target=_glob_process_lexical_count_f, args=[self.moses_interface.phrase_count_f,self.tempdir])
@@ -847,9 +853,13 @@ class Triangulate_TMs():
         try:
             word_count[0] = count2[0]
             word_count[1] = count1[0]
-            word_count[2] = self.estimate_counts(count1[2],count2[2])
+            #word_count[2] = self.estimate_counts(count1[2],count2[2])
         except:
             raise TypeError("Wrong format of co-occurrence counts")
+        try:
+            word_count[2] = self.estimate_counts(count1[2],count2[2])
+        except:
+            sys.stderr.write("Missing co-occurrence counts, set default value to 0\n")
         return word_count
 
 # --------------------------------------------------------------------------
@@ -1028,7 +1038,7 @@ if __name__ == "__main__":
                                output_file=os.path.normpath('/'.join([args.tmp, 'phrase-table'])),
                                action=args.action,
                                computed=args.computation,
-                               output_lexical=args.output_lexical,
+                               output_lexical=args.outlex,
                                tempdir=args.tmp,
                                number_of_features=args.number_of_features,
                                write_phrase_penalty=args.write_phrase_penalty)
@@ -1045,6 +1055,7 @@ if __name__ == "__main__":
                           output_file=args.output,
                           mode=triangulator.mode,
                           action=args.action,
+                          output_lexical=triangulator.output_lexical,
                           moses_interface=triangulator.moses_interface,
                           weight=args.weight,
                           tempdir=args.tmp)

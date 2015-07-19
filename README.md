@@ -13,7 +13,9 @@ This program handles the triangulation of Moses phrase tables, with 6 different 
 
 ##### REQUIREMENTS
 
-The script requires Python >= 2.6. 
+The script requires Python >= 2.6.
+
+The script has not yet been run on Windows.
 
 ##### USAGE
 
