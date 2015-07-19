@@ -25,13 +25,13 @@ This command will merge model1 with itself and estimate the feature values based
 
 The basic command line: `./tmtriangulate.py [action] -s source-phrase-table -t target-phrase-table`
 
-Until now, you can use two actions:
+Until now, there are two actions, associated with two approaches to estimating values of the source-target phrase table:
 
-* `features_based`: Estimating new features from the posterior features. 
+* `features_based`: Computing the new probabilities from the component probabilities "Machine Translation by Triangulation: Making Effective Use of Multi-Parallel Corpora" (Cohn et al 2007)
 
-* `counts_based`: Re-estimating the co-occurrence counts
+* `counts_based`: Computing the new probabilities by approximating new co-occurrence counts "Improving Pivot-Based Statistical Machine Translation by Pivoting the Co-occurrence Count of Phrase Pairs" (Zhu et al 2014)
 
-Each action is set to default with its best parameters. Typically, you have to specify a few parameters:
+Each action is set to default with its best options. Typically, you have to specify a few parameters:
 
 * mode (`-m`): accepts `pst` and `spt`, indicating the input as source-pivot phrase table or pivot-source phrase table
 
