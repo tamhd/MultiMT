@@ -20,8 +20,7 @@ The script requires Python >= 2.6.
 `TmTriangulate` merges two phrase tables into one phrase table.
 
 A command example: `./tmtriangulate.py features_based -s test/model1 -t test/model1`
-
-This command will merge model1 with itself and estimate the feature values based on posterior probabilities, following the approach proposed by Cohn et al. 2007.
+This command will merge model1 with itself and estimate the feature values based on posterior probabilities.
 
 The basic command line: `./tmtriangulate.py [action] -s source-phrase-table -t target-phrase-table`
 
