@@ -620,9 +620,19 @@ class Triangulate_TMs():
         """write a new phrase table based on existing weights of two other tables
            #NOTE: Indeed, all processes start here"""
 
-        #1: formulate the input to pst mode
-        model1 = (handle_file(os.path.join(self.model1,'model','phrase-table'), 'open', 'r'),1,1)
-        model2 = (handle_file(os.path.join(self.model2,'model','phrase-table'), 'open', 'r'),1,2)
+        #1: formulate the input phrase tables
+        if os.path.isfile(self.model1):
+            model1 = (handle_file(self.model1, 'open', 'r'),1,1)
+        elif os.path.isdir(self.model1):
+            model1 = (handle_file(os.path.join(self.model1,'model','phrase-table'), 'open', 'r'),1,1)
+        else:
+            raise TypeError("The source-pivot phrase table does not exists")
+        if os.path.isfile(self.model2):
+            model2 = (handle_file(self.model2, 'open', 'r'),1,2)
+        elif os.path.isdir(self.model2):
+            model2 = (handle_file(os.path.join(self.model2,'model','phrase-table'), 'open', 'r'),1,2)
+        else:
+            raise TypeError("The pivot-target phrase table does not exists")
         model1, model2 = self._ensure_inverted(model1, model2)
 
         #2: prepare temporary files
