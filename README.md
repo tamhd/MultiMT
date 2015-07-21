@@ -13,7 +13,7 @@ This program handles the triangulation of Moses phrase tables, with 6 different 
 
 ##### REQUIREMENTS
 
-The script requires Python >= 2.6.
+The script requires Python >= 2.7.
 
 The script has not yet been run on Windows.
 
@@ -34,11 +34,11 @@ Until now, there are two actions, associated with two approaches to estimating v
 
 Each action is set to default with its best options. Typically, you have to specify a few parameters:
 
-* mode (`-m`): accepts `pst` and `spt`, indicating the input as source-pivot phrase table or pivot-source phrase table
+* mode (`-m`): indicates the direction of input phrase tables, i.e. source-pivot or pivot-source.
 
-* computation (`-co`): specifies the scenario to triangulate the co-occurrence counts
+* computation (`-co`): specifies the scenario to triangulate the co-occurrence counts.
 
-* weight (`-w`): specifies the scenario to combine weights of identical phrase pairs
+* weight (`-w`): specifies the scenario to combine weights of identical phrase pairs.
 
 For further usage information, run `./tmcombine.py -h`
 
