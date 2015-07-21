@@ -37,50 +37,48 @@ def parse_command_line():
 
     group1 = parser.add_argument_group('Main options')
     group2 = parser.add_argument_group('More model combination options')
-    group3 = parser.add_argument_group('Naive triangulation')
 
     group1.add_argument('action', metavar='ACTION', choices=["features_based","counts_based"],
-                    help='What you want to do with the models. One of %(choices)s.')
+                    help='Which triangulation method to apply. One of %(choices)s.')
 
     group1.add_argument('-s', metavar='DIRECTORY', dest='srcpvt',
-                    help='model of the source and pivot, actually, it is going to be pivot-source')
+                    help='The source and pivot phrase table')
 
     group1.add_argument('-t', metavar='DIRECTORY', dest='pvttgt',
-                    help='model of pivot and target')
+                    help='The pivot and target phrase table')
 
     group1.add_argument('-w', '--weight', dest='weight', type=str,
                     default='summation',
                     choices=["summation", "maximization"],
-                    help='option to mixing identical pairs if the action is features_based, you have 2 choices: summation and maximization')
+                    help='Computation of p(s|t) if the action is features_based, Default: %(default)s')
 
     group1.add_argument('-m', '--mode', type=str,
-                    default="pst",
-                    choices=["spt","pst"],
-                    help='basic mixture-model algorithm. Default: %(default)s. Note: depending on mode and additional configuration, additional statistics are needed. Check docstring documentation of Triangulate_TMs() for more info.')
+                    choices=["sppt","pspt", "pstp", "sptp"],
+                    help='Input mode of the source-pivot and pivot-target phrase tables. One of %(choice)s')
 
     group1.add_argument('-co', '--computation', dest='computation',
-                    default="minimum",
-                    choices=['minimum',"maximum","arithmetic-mean",'geometric-mean'],
-                    help='choose to measures the co-occurrences if the action is counts_based, you have 4 options: minimum, maximum, arithmetic mean and geometric mean')
+                    default="min",
+                    choices=['min',"max","a-mean",'g-mean'],
+                    help='Approach to approximating the co-occurrence counts. One of %(choice)s')
 
     group1.add_argument('-o', '--output', type=str,
                     default="-",
-                    help='Output file (phrase table). If not specified, model is written to standard output.')
+                    help='Output file (phrase table). If not specified, the phrase table is written to standard output.')
 
     group1.add_argument('-l', '--output-lexical', dest='outlex', type=str,
                     default=None,
-                    help=('Not only create a combined phrase table, but also combined lexical tables. Writes to OUTPUT_LEXICAL.e2f and OUTPUT_LEXICAL.f2e, or OUTPUT_LEXICAL.counts.e2f in mode \'counts\'.'))
+                    help=('Output lexical files. Default: %(default)s'))
 
     group1.add_argument('-tmpdir', '--tmpdir', dest='tmp', type=str,
                     default=".",
-                    help=('Temporary directory to put the intermediate phrase'))
+                    help=('Temporary directory to put the intermediate files. By default they are written to the current directory'))
 
     group2.add_argument('--write-phrase-penalty', action="store_true",
       help=("Include phrase penalty in phrase table"))
 
     group2.add_argument('--number_of_features', type=int,
                     default=4, metavar='N',
-                    help=('Combine models with N + 1 features (last feature is constant phrase penalty). (default: %(default)s)'))
+                    help=('The number of features in the phrase table. (default: %(default)s)'))
 
     return parser.parse_args()
 
@@ -272,9 +270,8 @@ def _glob_get_lexical(word_pairs_e2f,word_count_e,word_count_f,path,bridge,flag)
                 output_lex_prob_e2f.write(b"%s %s %.7f\n" %(f,e,float(val)/word_count_e[e]))
                 output_lex_prob_f2e.write(b"%s %s %.7f\n" %(e,f,float(val)/word_count_f[f]))
 
-    handle_file("{0}{1}.{2}".format(path,bridge,'e2f'),'close',output_lex_prob_e2f,mode='w')
-    handle_file("{0}{1}.{2}".format(path,bridge,'f2e'),'close',output_lex_prob_f2e,mode='w')
-    if flag == 1:
+        handle_file("{0}{1}.{2}".format(path,bridge,'e2f'),'close',output_lex_prob_e2f,mode='w')
+        handle_file("{0}{1}.{2}".format(path,bridge,'f2e'),'close',output_lex_prob_f2e,mode='w')
         handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'e2f'),'close',output_lex_count_e2f,mode='w')
         handle_file("{0}{1}.{2}.{3}".format(path,bridge,"count",'f2e'),'close',output_lex_count_f2e,mode='w')
     sys.stderr.write("Done\n")
@@ -573,7 +570,7 @@ class Triangulate_TMs():
                       model2=None,
                       weight=None,
                       output_file=None,
-                      mode='pst',
+                      mode='pspt',
                       action=None,
                       computed=None,
                       tempdir=None,
@@ -596,11 +593,11 @@ class Triangulate_TMs():
 
         # It's possible to have the input in several modes: stp or tps
         self.inverted = None
-        if mode not in ['pst','spt']:
-            sys.stderr.write('Error: mode must be either "pst" or "spt"\n')
+        if mode not in ['pspt','sppt','pstp','sptp']:
+            sys.stderr.write('Error: incorrect input mode\n')
             sys.exit(1)
-        elif mode == 'spt':
-            self.inverted='src-pvt'
+        else:
+            self.inverted=mode
 
         self.number_of_features = int(number_of_features)
 
@@ -664,15 +661,15 @@ class Triangulate_TMs():
             to pivot phrases
         '''
         # If the mode is 'pst'
-        if (not self.inverted):
+        if (self.inverted == 'pspt'):
             return (model1, model2)
 
         models=[]
-        if (self.inverted == 'src-pvt'):
+        if (self.inverted == 'sppt'):
             models.append(model1)
-        elif (self.inverted == 'tgt-pvt'):
+        elif (self.inverted == 'pstp'):
             models.append(model2)
-        elif (self.inverted == 'both'):
+        elif (self.inverted == 'sptp'):
             models.append(model1)
             models.append(model2)
         else:
