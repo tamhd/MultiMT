@@ -21,10 +21,10 @@ The script has not yet been run on Windows.
 
 `TmTriangulate` merges two phrase tables into one phrase table.
 
-A command example: `./tmtriangulate.py features_based -s test/model1 -t test/model1`
+A command example: `./tmtriangulate.py features_based -m pspt -s test/model1 -t test/model1`
 This command will merge model1 with itself and estimate the feature values based on posterior probabilities.
 
-The basic command line: `./tmtriangulate.py [action] -s source-phrase-table -t target-phrase-table`
+The basic command line: `./tmtriangulate.py [action] -m [sppt] -s source-phrase-table -t target-phrase-table`
 
 Until now, there are two actions, associated with two approaches to estimating values of the source-target phrase table:
 
