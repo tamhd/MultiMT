@@ -1,9 +1,0 @@
-_T=20150710_23:19:49_24188	 ls
-_T=20150710_23:19:55_24188	 cat phrase-table | wc -l
-_T=20150710_23:20:43_24188	 cat phrase-table | tail
-_T=20150710_23:20:47_24188	 cat phrase-table | tail -1000
-_T=20150710_23:20:59_24188	 cat phrase-table | tail -1000
-_T=20150710_23:21:04_24188	 mv phrase-table phrase-table-full
-_T=20150710_23:21:16_24188	 cat phrase-table-full | tail -20000 > phrase-table
-_T=20150719_22:11:54_9384	 ls
-_T=20150719_22:11:58_9384	 rm phrase-table-full
