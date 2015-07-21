@@ -594,8 +594,7 @@ class Triangulate_TMs():
         # It's possible to have the input in several modes: stp or tps
         self.inverted = None
         if mode not in ['pspt','sppt','pstp','sptp']:
-            sys.stderr.write('Error: incorrect input mode\n')
-            sys.exit(1)
+            raise TypeError('Error: incorrect input mode, please type ./tmtriangulate -h for help\n')
         else:
             self.inverted=mode
 
