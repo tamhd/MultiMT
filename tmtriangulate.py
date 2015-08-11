@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# August 2015: Fix problems of script parameters
 # July 2015: Polishing the source codes
 # Feb 2015: Design 'counts_based': recomputing the co-occurrence counts
 #      Improving Pivot-Based Statistical Machine Translation by Pivoting the Co-occurrence Count of Phrase Pairs - Zhu and He et al 2014
@@ -9,15 +10,10 @@
 # Before Dec 2014: The author was too lazy to use GitHub, no revision control.
 
 from __future__ import division, unicode_literals
-import sys
-import os
-import gzip
+import sys, os, gzip, re
 import argparse
 import copy
-import re
-from math import log, exp, sqrt
 from collections import defaultdict
-from operator import mul
 from tempfile import NamedTemporaryFile
 from subprocess import Popen
 from multiprocessing import Pool,Value,Process
@@ -33,13 +29,13 @@ except:
 # --------------------------------------------------------------------------
 def parse_command_line():
 
-    parser = argparse.ArgumentParser(description="Combine translation models. Check DOCSTRING of the class Triangulate_TMs() and its methods for a more in-depth documentation and additional configuration options not available through the command line. The function test() shows examples")
+    parser = argparse.ArgumentParser(description="TmTriangulate - Connecting two phrase tables")
 
     group1 = parser.add_argument_group('Main options')
-    group2 = parser.add_argument_group('More model combination options')
+    group2 = parser.add_argument_group('Additional options')
 
     group1.add_argument('action', metavar='ACTION', choices=["features_based","counts_based"],
-                    help='Which triangulation method to apply. One of %(choices)s.')
+            help='Which triangulation method to apply. One of: %(choices)s.')
 
     group1.add_argument('-s', metavar='DIRECTORY', dest='srcpvt',
                     help='The source and pivot phrase table')
@@ -54,12 +50,12 @@ def parse_command_line():
 
     group1.add_argument('-m', '--mode', type=str,
                     choices=["sppt","pspt", "pstp", "sptp"],
-                    help='Input mode of the source-pivot and pivot-target phrase tables. One of %(choice)s')
+                    help='Input mode of the source-pivot and pivot-target phrase tables. One of: %(choices)s')
 
     group1.add_argument('-co', '--computation', dest='computation',
                     default="min",
                     choices=['min',"max","a-mean",'g-mean'],
-                    help='Approach to approximating the co-occurrence counts. One of %(choice)s')
+                    help='Approach to approximating the co-occurrence counts. One of: %(choices)s')
 
     group1.add_argument('-o', '--output', type=str,
                     default="-",
@@ -73,8 +69,7 @@ def parse_command_line():
                     default=".",
                     help=('Temporary directory to put the intermediate files. By default they are written to the current directory'))
 
-    group2.add_argument('--write-phrase-penalty', action="store_true",
-      help=("Include phrase penalty in phrase table"))
+    group2.add_argument('--write-phrase-penalty', action="store_true", help=("Include phrase penalty in phrase table"))
 
     group2.add_argument('--number_of_features', type=int,
                     default=4, metavar='N',
@@ -1021,10 +1016,6 @@ if __name__ == "__main__":
 
     if len(sys.argv) < 2:
         sys.stderr.write("no command specified. use option -h for usage instructions\n")
-
-    elif sys.argv[1] == "test":
-        test()
-
     else:
         args = parse_command_line()
         #1 Triangulate phrase pairs
