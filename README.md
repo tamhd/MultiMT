@@ -52,6 +52,6 @@ This project is under development!
 
 Python multi-processing is automatically activated. There is no need for any configuration.
 
-Author: Tam Hoang, Ondrej Bojar
+Author: Tam Hoang, Ondřej Bojar
 
 If you have any comments, questions or suggestions, even jokes, feel free to send me an email at `tamhd1990 AT gmail DOT com`
