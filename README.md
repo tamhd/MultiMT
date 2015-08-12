@@ -40,11 +40,17 @@ Each action is set to default with its best options. Typically, you have to spec
 
 * weight (`-w`): specifies the scenario to combine weights of identical phrase pairs.
 
+* source PT (`-s`): specifies the source phrase table or its directory with a given structure (dir/model/phrase-table)
+
+* target PT (`-t`): specifies the target phrase table or its directory with a given structure (dir/model/phrase-table) 
+
 For further usage information, run `./tmcombine.py -h`
 
 ##### FURTHER NOTES
 
 This project is under development! 
+
+Python multi-processing is automatically activated. There is no need for any configuration.
 
 Author: Tam Hoang, Ondrej Bojar
 
